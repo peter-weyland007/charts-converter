@@ -76,13 +76,13 @@ INPUT_FORMATS: dict[str, InputFormat] = {
 }
 
 OUTPUT_FORMATS: dict[str, OutputFormat] = {
-    "Feedback package": OutputFormat(
+    "Feedpak package": OutputFormat(
         id=OUTPUT_FORMAT_FEEDBACK,
-        label="Feedback package",
-        extension=".feedback",
+        label="Feedpak package",
+        extension=".feedpak",
         browse_kind="file",
-        filetypes=[("Feedback packages", "*.feedback"), ("All files", "*")],
-        description="Create a packaged output file.",
+        filetypes=[("Feedpak packages", "*.feedpak"), ("All files", "*")],
+        description="Create a packaged output file with a .feedpak extension.",
     ),
     "Loose chart folder": OutputFormat(
         id=OUTPUT_FORMAT_FOLDER,
@@ -96,7 +96,7 @@ OUTPUT_FORMATS: dict[str, OutputFormat] = {
 
 DEFAULT_SOURCE_MODE = SOURCE_MODE_SINGLE
 DEFAULT_INPUT_FORMAT = INPUT_FORMAT_LABELS[INPUT_FORMAT_PSARC]
-DEFAULT_OUTPUT_FORMAT = "Feedback package"
+DEFAULT_OUTPUT_FORMAT = "Feedpak package"
 
 
 def selected_input_format(label: str) -> InputFormat:
@@ -120,7 +120,7 @@ def suggested_output_name(input_path: str, output_format: OutputFormat | None = 
     if output_format.browse_kind == "directory":
         base = src.stem if looks_like_file else src.name
         return f"{base}-charts" if looks_like_file else f"{src.name}-export"
-    extension = output_format.extension or ".feedback"
+    extension = output_format.extension or ".feedpak"
     base = src.stem if looks_like_file else src.name
     return f"{base}{extension}"
 

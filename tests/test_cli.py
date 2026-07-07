@@ -123,7 +123,7 @@ def test_generated_package_contains_manifest_and_audio() -> None:
 def test_input_and_output_format_defaults_are_configured() -> None:
     assert selected_input_format(DEFAULT_INPUT_FORMAT) == INPUT_FORMATS[DEFAULT_INPUT_FORMAT]
     assert selected_output_extension(DEFAULT_OUTPUT_FORMAT) == OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT].extension
-    assert suggest_output_path("/tmp/test-song.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE).endswith(".feedback")
+    assert suggest_output_path("/tmp/test-song.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE).endswith(".feedpak")
 
 
 def test_batch_mode_suggests_output_folder() -> None:
@@ -133,14 +133,14 @@ def test_batch_mode_suggests_output_folder() -> None:
 
 def test_single_file_output_uses_input_basename_in_same_folder() -> None:
     suggested = suggest_output_path("/tmp/Weezer.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE)
-    assert suggested == "/tmp/Weezer.feedback"
-    assert suggested_output_name("/tmp/Weezer.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]) == "Weezer.feedback"
+    assert suggested == "/tmp/Weezer.feedpak"
+    assert suggested_output_name("/tmp/Weezer.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]) == "Weezer.feedpak"
 
 
 def test_clone_hero_single_file_output_uses_folder_name() -> None:
     suggested = suggest_output_path("/tmp/My Song", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE)
-    assert suggested == "/tmp/My Song/My Song.feedback"
-    assert suggested_output_name("/tmp/My Song", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]) == "My Song.feedback"
+    assert suggested == "/tmp/My Song/My Song.feedpak"
+    assert suggested_output_name("/tmp/My Song", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]) == "My Song.feedpak"
 
 
 def test_single_folder_output_uses_input_basename() -> None:
@@ -187,7 +187,7 @@ def test_convert_psarc_to_loose_chart_folder(tmp_path: Path) -> None:
 def test_convert_loose_chart_folder_to_feedback_package(tmp_path: Path) -> None:
     loose_dir = tmp_path / "source-charts"
     convert_chart_source(PSARC_SAMPLE, loose_dir, output_format=OUTPUT_FORMAT_FOLDER)
-    out_file = tmp_path / "repacked.feedback"
+    out_file = tmp_path / "repacked.feedpak"
     report = convert_chart_source(loose_dir, out_file, input_format=INPUT_FORMAT_LOOSE, output_format=OUTPUT_FORMAT_FEEDBACK)
     assert report.input_format == INPUT_FORMAT_LOOSE
     assert out_file.exists()
@@ -204,7 +204,7 @@ def test_batch_convert_psarc_folder_to_feedback(tmp_path: Path) -> None:
     assert report.discovered_inputs >= 3
     assert report.failed_count == 0
     assert report.converted_count == report.discovered_inputs
-    assert (out_root / "Paramore_Hallelujah_v1_DD_p.feedback").exists()
+    assert (out_root / "Paramore_Hallelujah_v1_DD_p.feedpak").exists()
 
 
 def test_batch_convert_psarc_folder_to_loose_folders(tmp_path: Path) -> None:
@@ -241,7 +241,7 @@ def test_cli_batch_convert_reports_results(capsys, tmp_path: Path) -> None:
 def test_clone_hero_convert_to_feedback_package(tmp_path: Path) -> None:
     _enable_clone_hero_helper()
     song_dir = _make_clone_hero_song(tmp_path, "clone-hero-single")
-    out_file = tmp_path / "clone-hero.feedback"
+    out_file = tmp_path / "clone-hero.feedpak"
     report = convert_chart_source(song_dir, out_file, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDBACK)
     assert report.input_format == INPUT_FORMAT_CLONE_HERO
     assert out_file.exists()
@@ -270,7 +270,7 @@ def test_clone_hero_batch_discovery_and_conversion(tmp_path: Path) -> None:
     report = batch_convert_chart_sources(root, out_root, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDBACK)
     assert report.failed_count == 0
     assert report.converted_count == 2
-    assert len(list(out_root.glob("*.feedback"))) == 2
+    assert len(list(out_root.glob("*.feedpak"))) == 2
 
 
 def test_format_report_is_pretty_json() -> None:

@@ -114,12 +114,12 @@ INPUT_FORMAT_LABELS = {
 }
 
 OUTPUT_FORMAT_LABELS = {
-    OUTPUT_FORMAT_FEEDBACK: "Feedback package",
+    OUTPUT_FORMAT_FEEDBACK: "Feedpak package",
     OUTPUT_FORMAT_FOLDER: "Loose chart folder",
 }
 
 OUTPUT_EXTENSIONS = {
-    OUTPUT_FORMAT_FEEDBACK: ".feedback",
+    OUTPUT_FORMAT_FEEDBACK: ".feedpak",
     OUTPUT_FORMAT_FOLDER: "",
 }
 

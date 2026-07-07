@@ -111,7 +111,7 @@ def clone_hero_to_loose_chart_folder(song_dir: str | Path, output_dir: str | Pat
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="charts_converter_ch_") as td:
-        package_path = Path(td) / "song.feedback"
+        package_path = Path(td) / "song.feedpak"
         written = convert_clone_hero_folder(song_dir, package_path, verbose=False)
         import zipfile
 

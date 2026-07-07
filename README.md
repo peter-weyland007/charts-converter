@@ -30,7 +30,7 @@ That means the packaged app/CLI can convert songs without requiring those tools 
 - **Loose chart folder**
 
 ### Output formats
-- **Feedback package** (`.feedback` by default; legacy package extensions still validate)
+- **Feedpak package** (`.feedpak` by default; legacy package extensions still validate)
 - **Loose chart folder**
 
 ## What is still not done
@@ -61,13 +61,13 @@ pip install -e '.[build]'
 charts-converter --help
 charts-converter inspect song.psarc
 charts-converter extract song.psarc --work-root ./work/song
-charts-converter convert song.psarc ./out/song.feedback
+charts-converter convert song.psarc ./out/song.feedpak
 charts-converter convert song.psarc ./out/song-charts --output-format loose-chart-folder
-charts-converter convert ./normalized/song ./out/song.feedback --input-format loose-chart-folder
-charts-converter convert ./clone-hero/song-folder ./out/song.feedback --input-format clone-hero-folder
+charts-converter convert ./normalized/song ./out/song.feedpak --input-format loose-chart-folder
+charts-converter convert ./clone-hero/song-folder ./out/song.feedpak --input-format clone-hero-folder
 charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedback-package
 charts-converter convert ./clone-hero-library ./out-folder --batch --input-format clone-hero-folder --output-format feedback-package
-charts-converter validate ./out/song.feedback
+charts-converter validate ./out/song.feedpak
 charts-converter validate ./out/song-charts
 ```
 
