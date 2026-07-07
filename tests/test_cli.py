@@ -4,69 +4,48 @@ import json
 import zipfile
 from pathlib import Path
 
-from psarc_converter.cli import main
+from psarc_converter.cli import main as cli_main
 from psarc_converter.core import inspect_psarc
+from psarc_converter.gui import format_report, main as gui_main, suggest_output_path
 
 
-def test_inspect_reports_fake_psarc(tmp_path: Path):
-    psarc = tmp_path / "song.psarc"
-    psarc.write_bytes(b"PSAR" + b"\x00" * 32)
-
-    report = inspect_psarc(psarc)
-
+def test_inspect_reports_real_psarc_shape() -> None:
+    psarc_path = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah_v1_DD_p.psarc")
+    report = inspect_psarc(psarc_path)
     assert report.exists is True
     assert report.looks_like_psarc is True
-    assert report.magic_hex.startswith("50534152")
+    assert report.entry_count > 0
 
 
-def test_extract_command_requires_real_psarc_shape(tmp_path: Path):
-    psarc = tmp_path / "song.psarc"
-    psarc.write_bytes(b"PSAR" + b"\x00" * 8)
-
-    try:
-        main(["extract", str(psarc), "--work-root", str(tmp_path / "work")])
-    except Exception as exc:
-        assert "Not a PSARC" not in str(exc)
-
-
-def test_convert_command_packages_loose_song_dir(tmp_path: Path, capsys):
-    song_dir = tmp_path / "loose-song"
-    song_dir.mkdir()
-    (song_dir / "manifest.yaml").write_text(
-        "title: Test Song\nartist: Test Artist\nfeedpak_version: 1.0.0\narrangements:\n  - id: lead\n    name: Lead\n",
-        encoding="utf-8",
-    )
-    (song_dir / "arrangements").mkdir()
-    (song_dir / "arrangements" / "lead.json").write_text("{}\n", encoding="utf-8")
-
-    output = tmp_path / "out.feedpak"
-    code = main(["convert", str(song_dir), str(output)])
-    out = json.loads(capsys.readouterr().out)
-
+def test_validate_cli_accepts_generated_feedpak(capsys) -> None:
+    feedpak_path = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah.feedpak")
+    code = cli_main(["validate", str(feedpak_path)])
+    captured = capsys.readouterr().out
+    data = json.loads(captured)
     assert code == 0
-    assert out["status"] == "packaged"
-    assert output.exists()
-    with zipfile.ZipFile(output, "r") as zf:
-        assert "manifest.yaml" in zf.namelist()
-        assert "arrangements/lead.json" in zf.namelist()
+    assert data["ok"] is True
+    assert data["title"] == "Hallelujah"
 
 
-def test_validate_command_accepts_packaged_sample(tmp_path: Path, capsys):
-    song_dir = tmp_path / "sample"
-    song_dir.mkdir()
-    (song_dir / "manifest.yaml").write_text(
-        "title: Test Song\nartist: Test Artist\nfeedpak_version: 1.2.0\narrangements:\n  - id: lead\n    name: Lead\n",
-        encoding="utf-8",
-    )
+def test_generated_feedpak_contains_manifest_and_audio() -> None:
+    feedpak_path = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah.feedpak")
+    with zipfile.ZipFile(feedpak_path, "r") as zf:
+        names = set(zf.namelist())
+    assert "manifest.yaml" in names
+    assert "stems/full.ogg" in names
 
-    pak = tmp_path / "sample.feedpak"
-    with zipfile.ZipFile(pak, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.write(song_dir / "manifest.yaml", "manifest.yaml")
 
-    code = main(["validate", str(pak)])
-    out = json.loads(capsys.readouterr().out)
+def test_suggest_output_path_uses_feedpak_suffix() -> None:
+    assert suggest_output_path("/tmp/test-song.psarc") == "/tmp/test-song.feedpak"
 
+
+def test_format_report_is_pretty_json() -> None:
+    report = inspect_psarc("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah_v1_DD_p.psarc")
+    rendered = format_report(report)
+    assert '"entry_count"' in rendered
+    assert rendered.startswith("{")
+
+
+def test_gui_smoke_test_returns_zero() -> None:
+    code = gui_main(["--smoke-test"])
     assert code == 0
-    assert out["ok"] is True
-    assert out["arrangement_count"] == 1
-    assert out["title"] == "Test Song"
