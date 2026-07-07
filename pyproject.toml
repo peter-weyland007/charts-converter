@@ -17,6 +17,12 @@ dependencies = [
   "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+build = [
+  "pyinstaller>=6.10",
+  "pytest>=8.0",
+]
+
 [project.scripts]
 psarc-converter = "psarc_converter.cli:main"
 psarc-converter-gui = "psarc_converter.gui:main"

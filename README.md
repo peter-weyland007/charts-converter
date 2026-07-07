@@ -10,20 +10,32 @@ Right now it provides:
 - a working **CLI** for inspect / extract / convert / validate
 - a simple **desktop GUI** that wraps the same converter core
 - real conversion coverage against multiple sample `.psarc` files
+- packaging for **macOS, Linux, and Windows** executables
 
 What is currently expected on the host:
 - `ffmpeg`
 - `vgmstream-cli`
 
+Bundled inside the app/builds:
+- `RsCli` for SNG-only conversion support
+
 What is not done yet:
 - multi-stem separation (current output is a single full-song stem)
-- broader source-format normalization beyond the Rocksmith PSARC path implemented here
+- bundling `ffmpeg` and `vgmstream-cli` per platform
 - GUI polish beyond the first usable local window
 
 ## Install
 
+### Python / editable dev install
+
 ```bash
 pip install -e .
+```
+
+### Build dependencies
+
+```bash
+pip install -e '.[build]'
 ```
 
 ## Usage
@@ -52,6 +64,40 @@ The GUI currently gives you:
 - Validate Output button
 - activity log
 - Open Output Folder button
+
+## Click-to-launch builds
+
+Build local executables with:
+
+```bash
+python scripts/build_release.py
+```
+
+That produces:
+- **GUI app**
+  - macOS: `psarc-converter.app`
+  - Linux: `psarc-converter/`
+  - Windows: `psarc-converter/`
+- **CLI executable**
+  - `psarc-converter-cli/`
+
+under `release/dist/<platform-arch>/`
+
+Notes:
+- the GUI build is the click-to-launch desktop app
+- the CLI build is for terminal-only use
+- GitHub Actions also builds zipped artifacts for macOS / Linux / Windows
+
+## GitHub Actions release flow
+
+The repo includes:
+- `.github/workflows/build-release.yml`
+
+It will:
+- run tests
+- build GUI + CLI artifacts on macOS, Linux, and Windows
+- upload zipped artifacts
+- attach them to tagged releases like `v0.1.0`
 
 ## Design
 

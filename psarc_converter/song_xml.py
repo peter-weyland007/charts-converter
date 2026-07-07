@@ -14,6 +14,8 @@ from pathlib import Path
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
 
+from .runtime import bundled_path, find_command
+
 
 @dataclass
 class Note:
@@ -218,20 +220,13 @@ def _find_rscli() -> str | None:
     env = os.environ.get("RSCLI_PATH", "")
     candidates = [
         env,
-        str(Path(__file__).resolve().parents[1] / "tools" / "rscli" / "RsCli"),
+        str(bundled_path("tools", "rscli", "RsCli")),
         "/opt/rscli/RsCli",
-        "RsCli",
+        find_command("RsCli"),
     ]
     for candidate in candidates:
-        if not candidate:
-            continue
-        p = Path(candidate)
-        if p.exists():
-            return str(p)
-        if os.path.sep not in candidate:
-            found = shutil.which(candidate)
-            if found:
-                return found
+        if candidate and Path(candidate).exists():
+            return candidate
     return None
 
 

@@ -14,6 +14,7 @@ import yaml
 from PIL import Image
 
 from .psarc import list_entries, unpack_psarc
+from .runtime import find_command
 from .song_xml import arrangement_to_wire, load_song, parse_lyrics
 
 
@@ -220,7 +221,12 @@ def extract_psarc(input_path: str | Path, work_root: str | Path | None = None) -
 
 
 def _require_tool(name: str) -> str:
-    path = shutil.which(name)
+    bundled = None
+    if name == "ffmpeg":
+        bundled = "tools/ffmpeg/ffmpeg"
+    elif name == "vgmstream-cli":
+        bundled = "tools/vgmstream/vgmstream-cli"
+    path = find_command(name, bundled)
     if not path:
         raise RuntimeError(f"Required tool not found on PATH: {name}")
     return path
