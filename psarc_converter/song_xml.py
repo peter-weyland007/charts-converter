@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
 import bisect
 import json
+import os
+import shutil
+import struct
+import subprocess
 import xml.etree.ElementTree as ET
+import zlib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from Crypto.Cipher import AES
+from Crypto.Util import Counter
 
 
 @dataclass
@@ -100,6 +108,8 @@ class Song:
 
 
 _FALSE_LITERALS = frozenset({"", "0", "false", "False", "FALSE"})
+_PC_KEY = bytes.fromhex("CB648DF3D12A16BF71701414E69619EC171CCA5D2A142E3E59DE7ADDA18A3A30")
+_MAC_KEY = bytes.fromhex("9821330E34B91F70D0A48CBD625993126970CEA09192C0E6CDA676CC9838289D")
 
 
 def note_to_wire(n: Note) -> dict:
@@ -197,6 +207,68 @@ def _parse_note(n) -> Note:
         link_next=_bool(n, "linkNext"),
         tap=_bool(n, "tap"),
     )
+
+
+def _detect_platform(extracted_dir: str | Path) -> str:
+    parts = str(extracted_dir).lower()
+    return "mac" if "/macos/" in parts or "/mac/" in parts else "pc"
+
+
+def _find_rscli() -> str | None:
+    env = os.environ.get("RSCLI_PATH", "")
+    candidates = [
+        env,
+        str(Path(__file__).resolve().parents[1] / "tools" / "rscli" / "RsCli"),
+        "/opt/rscli/RsCli",
+        "RsCli",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        p = Path(candidate)
+        if p.exists():
+            return str(p)
+        if os.path.sep not in candidate:
+            found = shutil.which(candidate)
+            if found:
+                return found
+    return None
+
+
+def _convert_sng_to_xml(extracted_dir: str | Path) -> None:
+    d = Path(extracted_dir)
+    xml_files = list(d.rglob("*.xml"))
+    has_arrangement_xml = False
+    for xf in xml_files:
+        try:
+            root = ET.parse(xf).getroot()
+        except Exception:
+            continue
+        if root.tag == "song":
+            arr = (root.findtext("arrangement", default="") or "").lower().strip()
+            if arr not in ("vocals", "showlights", "jvocals"):
+                has_arrangement_xml = True
+                break
+    if has_arrangement_xml:
+        return
+    sng_files = list(d.rglob("*.sng"))
+    if not sng_files:
+        return
+    rscli = _find_rscli()
+    if not rscli:
+        return
+    platform = _detect_platform(d)
+    arr_dir = d / "songs" / "arr"
+    arr_dir.mkdir(parents=True, exist_ok=True)
+    for sng_path in sng_files:
+        if "vocals" in sng_path.stem.lower():
+            continue
+        xml_out = arr_dir / f"{sng_path.stem}.xml"
+        if xml_out.exists():
+            continue
+        result = subprocess.run([rscli, "sng2xml", str(sng_path), str(xml_out), platform], capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            raise RuntimeError(f"RsCli sng2xml failed for {sng_path.name}: {result.stderr or result.stdout}")
 
 
 def parse_arrangement(xml_path: str) -> Arrangement:
@@ -324,6 +396,7 @@ def parse_arrangement(xml_path: str) -> Arrangement:
 
 
 def load_song(extracted_dir: str | Path) -> Song:
+    _convert_sng_to_xml(extracted_dir)
     song = Song()
     root_dir = Path(extracted_dir)
     xml_files = sorted(root_dir.rglob("*.xml"))
@@ -422,6 +495,16 @@ def load_song(extracted_dir: str | Path) -> Song:
     return song
 
 
+def _decrypt_vocals_sng(data: bytes, platform: str) -> bytes:
+    iv = data[8:24]
+    encrypted = data[24:-56]
+    key = _MAC_KEY if platform == "mac" else _PC_KEY
+    ctr = Counter.new(128, initial_value=int.from_bytes(iv, "big"))
+    cipher = AES.new(key, AES.MODE_CTR, counter=ctr)
+    decrypted = cipher.decrypt(encrypted)
+    return zlib.decompress(decrypted[4:])
+
+
 def parse_lyrics(extracted_dir: str | Path) -> list[dict]:
     for xml_path in sorted(Path(extracted_dir).rglob("*.xml")):
         try:
@@ -434,4 +517,32 @@ def parse_lyrics(extracted_dir: str | Path) -> list[dict]:
             {"t": round(float(v.get("time", "0")), 3), "d": round(float(v.get("length", "0")), 3), "w": v.get("lyric", "")}
             for v in root.findall("vocal")
         ]
+    platform = _detect_platform(extracted_dir)
+    for sng_path in sorted(Path(extracted_dir).rglob("*vocals*.sng")):
+        try:
+            body = _decrypt_vocals_sng(sng_path.read_bytes(), platform)
+        except Exception:
+            continue
+        entry_size = 60
+        header_skip = 16
+        if len(body) < header_skip + 4:
+            continue
+        count = struct.unpack_from("<I", body, header_skip)[0]
+        if count == 0 or len(body) < header_skip + 4 + count * entry_size:
+            continue
+        out = []
+        off = header_skip + 4
+        for _ in range(count):
+            time, _note, length = struct.unpack_from("<fif", body, off)
+            lyric_raw = body[off + 12: off + 60]
+            nul = lyric_raw.find(b"\x00")
+            if nul >= 0:
+                lyric_raw = lyric_raw[:nul]
+            try:
+                lyric = lyric_raw.decode("utf-8")
+            except UnicodeDecodeError:
+                lyric = lyric_raw.decode("latin-1", errors="replace")
+            out.append({"t": round(float(time), 3), "d": round(float(length), 3), "w": lyric})
+            off += entry_size
+        return out
     return []
