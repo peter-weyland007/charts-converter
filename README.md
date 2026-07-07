@@ -1,6 +1,6 @@
 # charts-converter
 
-Standalone converter for turning supported chart input files into packaged output files.
+Standalone converter for turning supported chart input sources into either packaged files or loose chart folders.
 
 ## Current state
 
@@ -22,10 +22,20 @@ Release executables now bundle:
 
 That means the packaged app/CLI can convert songs without requiring those tools to already be installed on the target machine.
 
+## Supported flows right now
+
+### Input formats
+- **PSARC archive**
+- **Loose chart folder**
+
+### Output formats
+- **Feedback package** (`.feedback` by default; legacy package extensions still validate)
+- **Loose chart folder**
+
 ## What is still not done
 
 - multi-stem separation (current output is a single full-song stem)
-- broader input/output format support beyond the current first path
+- broader source families beyond the current first real path
 - notarization/signing/distribution polish for consumer-facing macOS releases
 
 ## Install
@@ -51,7 +61,10 @@ charts-converter --help
 charts-converter inspect song.psarc
 charts-converter extract song.psarc --work-root ./work/song
 charts-converter convert song.psarc ./out/song.feedback
+charts-converter convert song.psarc ./out/song-charts --output-format loose-chart-folder
+charts-converter convert ./normalized/song ./out/song.feedback --input-format loose-chart-folder
 charts-converter validate ./out/song.feedback
+charts-converter validate ./out/song-charts
 ```
 
 ### GUI
@@ -61,9 +74,10 @@ charts-converter-gui
 ```
 
 The GUI currently gives you:
-- input file picker
-- output file picker
+- input type selector
+- input file/folder picker
 - output type selector
+- output file/folder picker
 - optional scratch-folder picker
 - Convert button
 - Validate Output button
@@ -114,12 +128,24 @@ It will:
 - upload zipped artifacts
 - attach them to tagged releases like `v0.1.0`
 
+## Publish hygiene
+
+The repo is set up to keep generated artifacts out of git:
+- `.cache/`
+- `build/`
+- `dist/`
+- `release/build/`
+- `release/dist/`
+- `*.egg-info/`
+
+That keeps the GitHub repo source-only while still allowing local packaged handoff builds.
+
 ## Design
 
 This tool is built as a 3-stage pipeline:
 1. **extract** proprietary source assets into `raw/`
-2. **normalize** those assets into a debuggable loose song folder
-3. **package** the normalized folder into a packaged output file
+2. **normalize** those assets into a debuggable loose chart folder
+3. **package or export** the normalized folder into the chosen output shape
 
 That intermediate normalized folder is the point — it keeps the converter inspectable and fixable instead of turning into a black box.
 

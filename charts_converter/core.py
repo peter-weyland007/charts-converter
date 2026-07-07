@@ -6,8 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -18,28 +17,31 @@ from .runtime import default_user_cache_dir, find_command
 from .song_xml import arrangement_to_wire, load_song, parse_lyrics
 
 
-@dataclass
+@dataclass(frozen=True)
 class ToolProbe:
     name: str
     command: str
     found: bool
 
 
-@dataclass
-class PsarcInspection:
+@dataclass(frozen=True)
+class InputInspection:
     path: str
     exists: bool
+    is_dir: bool
     size_bytes: int
     sha256: str
     magic_hex: str
     suffix: str
-    looks_like_psarc: bool
+    format_id: str
+    format_label: str
+    looks_like_supported_input: bool
     entry_count: int
     entries_preview: list[str]
     extractor_candidates: list[ToolProbe]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExtractionReport:
     input_path: str
     raw_dir: str
@@ -47,7 +49,7 @@ class ExtractionReport:
     entries_preview: list[str]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ValidationReport:
     path: str
     ok: bool
@@ -55,15 +57,17 @@ class ValidationReport:
     issues: list[str]
     warnings: list[str]
     arrangement_count: int
-    feedpak_version: str | None
+    package_version: str | None
     title: str | None
     artist: str | None
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConversionReport:
     input_path: str
     output_path: str
+    input_format: str
+    output_format: str
     title: str
     artist: str
     arrangement_count: int
@@ -73,6 +77,29 @@ class ConversionReport:
     manifest_path: str
     used_cover: bool
     used_lyrics: bool
+
+
+INPUT_FORMAT_PSARC = "psarc"
+INPUT_FORMAT_LOOSE = "loose-chart-folder"
+OUTPUT_FORMAT_FEEDBACK = "feedback-package"
+OUTPUT_FORMAT_FOLDER = "loose-chart-folder"
+
+INPUT_FORMAT_LABELS = {
+    INPUT_FORMAT_PSARC: "PSARC archive",
+    INPUT_FORMAT_LOOSE: "Loose chart folder",
+}
+
+OUTPUT_FORMAT_LABELS = {
+    OUTPUT_FORMAT_FEEDBACK: "Feedback package",
+    OUTPUT_FORMAT_FOLDER: "Loose chart folder",
+}
+
+OUTPUT_EXTENSIONS = {
+    OUTPUT_FORMAT_FEEDBACK: ".feedback",
+    OUTPUT_FORMAT_FOLDER: "",
+}
+
+LEGACY_PACKAGE_EXTENSIONS = {".feedback", ".feedpak", ".sloppak"}
 
 
 def _sha256_file(path: Path) -> str:
@@ -93,29 +120,55 @@ def _probe_extractors() -> list[ToolProbe]:
     return [ToolProbe(name=name, command=cmd, found=shutil.which(cmd) is not None) for name, cmd in candidates]
 
 
-def inspect_psarc(path: str | Path) -> PsarcInspection:
+def detect_input_format(path: str | Path) -> str:
+    p = Path(path)
+    if p.is_dir():
+        return INPUT_FORMAT_LOOSE
+    if p.suffix.lower() == ".psarc":
+        return INPUT_FORMAT_PSARC
+    try:
+        with p.open("rb") as fh:
+            magic = fh.read(4)
+        if magic == b"PSAR":
+            return INPUT_FORMAT_PSARC
+    except Exception:
+        pass
+    return INPUT_FORMAT_PSARC
+
+
+def inspect_input_file(path: str | Path) -> InputInspection:
     p = Path(path)
     exists = p.exists()
-    size = p.stat().st_size if exists else 0
+    is_dir = p.is_dir() if exists else False
+    size = p.stat().st_size if exists and p.is_file() else 0
     sha = _sha256_file(p) if exists and p.is_file() else ""
     magic = ""
     entries: list[str] = []
+    format_id = detect_input_format(p) if exists else INPUT_FORMAT_PSARC
+
     if exists and p.is_file():
         with p.open("rb") as fh:
             magic = fh.read(16).hex()
-        try:
-            entries = list_entries(p)
-        except Exception:
-            entries = []
-    looks_like_psarc = magic.startswith("50534152") or p.suffix.lower() == ".psarc"
-    return PsarcInspection(
+        if format_id == INPUT_FORMAT_PSARC:
+            try:
+                entries = list_entries(p)
+            except Exception:
+                entries = []
+    elif exists and p.is_dir():
+        entries = [child.relative_to(p).as_posix() for child in sorted(p.rglob("*"))[:20]]
+
+    looks_supported = format_id in INPUT_FORMAT_LABELS and exists
+    return InputInspection(
         path=str(p.resolve()) if exists else str(p),
         exists=exists,
+        is_dir=is_dir,
         size_bytes=size,
         sha256=sha,
         magic_hex=magic,
         suffix=p.suffix.lower(),
-        looks_like_psarc=looks_like_psarc,
+        format_id=format_id,
+        format_label=INPUT_FORMAT_LABELS.get(format_id, format_id),
+        looks_like_supported_input=looks_supported,
         entry_count=len(entries),
         entries_preview=entries[:20],
         extractor_candidates=_probe_extractors(),
@@ -124,10 +177,6 @@ def inspect_psarc(path: str | Path) -> PsarcInspection:
 
 def _default_work_root(input_path: Path) -> Path:
     return default_user_cache_dir("charts-converter") / input_path.stem.replace(" ", "_")
-
-
-def inspect_input_file(path: str | Path) -> PsarcInspection:
-    return inspect_psarc(path)
 
 
 def _find_manifest_in_dir(src: Path) -> Path:
@@ -164,7 +213,7 @@ def _read_manifest_from_zip(src: Path) -> tuple[dict, str]:
 def package_loose_song(loose_dir: str | Path, output_path: str | Path) -> Path:
     src = Path(loose_dir)
     if not src.is_dir():
-        raise FileNotFoundError(f"Loose song directory not found: {src}")
+        raise FileNotFoundError(f"Loose chart directory not found: {src}")
     _find_manifest_in_dir(src)
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -172,6 +221,21 @@ def package_loose_song(loose_dir: str | Path, output_path: str | Path) -> Path:
         for child in sorted(src.rglob("*")):
             if child.is_file():
                 zf.write(child, child.relative_to(src).as_posix())
+    return out
+
+
+def copy_loose_chart_folder(loose_dir: str | Path, output_dir: str | Path) -> Path:
+    src = Path(loose_dir)
+    if not src.is_dir():
+        raise FileNotFoundError(f"Loose chart directory not found: {src}")
+    _find_manifest_in_dir(src)
+    out = Path(output_dir)
+    if out.exists():
+        if out.is_file():
+            raise RuntimeError(f"Output path is a file, expected directory: {out}")
+        shutil.rmtree(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, out)
     return out
 
 
@@ -188,7 +252,7 @@ def validate_chart_package(path: str | Path) -> ValidationReport:
     warnings: list[str] = []
     title = manifest.get("title") if isinstance(manifest.get("title"), str) else None
     artist = manifest.get("artist") if isinstance(manifest.get("artist"), str) else None
-    feedpak_version = manifest.get("feedpak_version") if isinstance(manifest.get("feedpak_version"), str) else None
+    package_version = manifest.get("feedpak_version") if isinstance(manifest.get("feedpak_version"), str) else None
     arrangements = manifest.get("arrangements")
     arrangement_count = len(arrangements) if isinstance(arrangements, list) else 0
 
@@ -196,20 +260,22 @@ def validate_chart_package(path: str | Path) -> ValidationReport:
         issues.append("Missing manifest.title")
     if not artist:
         warnings.append("Missing manifest.artist")
-    if not feedpak_version:
+    if not package_version:
         warnings.append("Missing manifest.feedpak_version")
     if not isinstance(arrangements, list):
         issues.append("Manifest arrangements must be a list")
     elif not arrangements:
         issues.append("Manifest arrangements list is empty")
 
-    return ValidationReport(str(p.resolve()), not issues, manifest_path, issues, warnings, arrangement_count, feedpak_version, title, artist)
+    return ValidationReport(str(p.resolve()), not issues, manifest_path, issues, warnings, arrangement_count, package_version, title, artist)
 
 
 def extract_input_archive(input_path: str | Path, work_root: str | Path | None = None) -> ExtractionReport:
     src = Path(input_path)
     if not src.exists():
         raise FileNotFoundError(src)
+    if detect_input_format(src) != INPUT_FORMAT_PSARC:
+        raise RuntimeError("Raw extraction is currently implemented only for PSARC input.")
     workdir = Path(work_root) if work_root else _default_work_root(src)
     raw_dir = workdir / "raw"
     if raw_dir.exists():
@@ -252,13 +318,17 @@ def _wem_to_ogg(wem_path: Path, out_ogg: Path) -> None:
         if r.returncode != 0 or not wav.exists() or wav.stat().st_size < 100:
             raise RuntimeError(f"vgmstream-cli failed: {r.stderr.strip()}")
         out_ogg.parent.mkdir(parents=True, exist_ok=True)
-        r2 = subprocess.run([
-            ffmpeg, "-y", "-i", str(wav), "-c:a", "libvorbis", "-q:a", "5", str(out_ogg)
-        ], capture_output=True, text=True)
+        r2 = subprocess.run(
+            [ffmpeg, "-y", "-i", str(wav), "-c:a", "libvorbis", "-q:a", "5", str(out_ogg)],
+            capture_output=True,
+            text=True,
+        )
         if r2.returncode != 0 or not out_ogg.exists() or out_ogg.stat().st_size < 100:
-            fallback = subprocess.run([
-                ffmpeg, "-y", "-i", str(wav), "-c:a", "vorbis", "-strict", "-2", "-q:a", "5", str(out_ogg)
-            ], capture_output=True, text=True)
+            fallback = subprocess.run(
+                [ffmpeg, "-y", "-i", str(wav), "-c:a", "vorbis", "-strict", "-2", "-q:a", "5", str(out_ogg)],
+                capture_output=True,
+                text=True,
+            )
             if fallback.returncode != 0 or not out_ogg.exists() or out_ogg.stat().st_size < 100:
                 raise RuntimeError(f"ffmpeg OGG encode failed: {(fallback.stderr or r2.stderr).strip()}")
 
@@ -276,41 +346,53 @@ def _extract_cover(extracted_dir: Path, out_jpg: Path) -> bool:
         return False
 
 
-def _write_normalized_song(extracted_dir: Path, normalized_dir: Path) -> ConversionReport:
+def _build_loose_chart_folder(extracted_dir: Path, normalized_dir: Path, input_format: str) -> ConversionReport:
     song = load_song(extracted_dir)
     if not song.arrangements:
-        raise RuntimeError("no playable arrangements found in PSARC")
+        if input_format == INPUT_FORMAT_PSARC:
+            raise RuntimeError("no playable arrangements found in PSARC")
+        raise RuntimeError("no playable arrangements found in input source")
 
     if normalized_dir.exists():
         shutil.rmtree(normalized_dir)
     normalized_dir.mkdir(parents=True, exist_ok=True)
 
     used_ids: set[str] = set()
-    arr_manifest: list[dict] = []
+    arrangement_manifest: list[dict] = []
     arrangement_names: list[str] = []
-    first = True
+    include_global_sections = True
     for arr in song.arrangements:
         base = "".join(ch.lower() if ch.isalnum() else "_" for ch in arr.name).strip("_") or "arr"
-        aid = base
+        arrangement_id = base
         n = 2
-        while aid in used_ids:
-            aid = f"{base}{n}"
+        while arrangement_id in used_ids:
+            arrangement_id = f"{base}{n}"
             n += 1
-        used_ids.add(aid)
+        used_ids.add(arrangement_id)
         arrangement_names.append(arr.name)
         wire = arrangement_to_wire(arr)
-        if first:
+        if include_global_sections:
             wire["beats"] = [{"time": round(b.time, 3), "measure": b.measure} for b in song.beats]
             wire["sections"] = [{"name": s.name, "number": s.number, "time": round(s.start_time, 3)} for s in song.sections]
-            first = False
-        arr_file = normalized_dir / "arrangements" / f"{aid}.json"
-        arr_file.parent.mkdir(parents=True, exist_ok=True)
-        arr_file.write_text(json.dumps(wire, separators=(",", ":")), encoding="utf-8")
-        arr_manifest.append({"id": aid, "name": arr.name, "file": f"arrangements/{aid}.json", "tuning": list(arr.tuning), "capo": arr.capo})
+            include_global_sections = False
+        arrangement_file = normalized_dir / "arrangements" / f"{arrangement_id}.json"
+        arrangement_file.parent.mkdir(parents=True, exist_ok=True)
+        arrangement_file.write_text(json.dumps(wire, separators=(",", ":")), encoding="utf-8")
+        arrangement_manifest.append(
+            {
+                "id": arrangement_id,
+                "name": arr.name,
+                "file": f"arrangements/{arrangement_id}.json",
+                "tuning": list(arr.tuning),
+                "capo": arr.capo,
+            }
+        )
 
     wems = _find_wem_files(extracted_dir)
     if not wems:
-        raise RuntimeError("no WEM audio found in PSARC")
+        if input_format == INPUT_FORMAT_PSARC:
+            raise RuntimeError("no WEM audio found in PSARC")
+        raise RuntimeError("no WEM audio found in input source")
     stem_out = normalized_dir / "stems" / "full.ogg"
     _wem_to_ogg(wems[0], stem_out)
     stem_files = ["stems/full.ogg"]
@@ -331,7 +413,8 @@ def _write_normalized_song(extracted_dir: Path, normalized_dir: Path) -> Convers
         "year": int(song.year or 0),
         "duration": round(float(song.song_length or 0.0), 3),
         "stems": [{"id": "full", "file": "stems/full.ogg", "default": "on"}],
-        "arrangements": arr_manifest,
+        "arrangements": arrangement_manifest,
+        "generated_at": datetime_to_iso8601(),
     }
     if used_cover:
         manifest["cover"] = "cover.jpg"
@@ -343,9 +426,11 @@ def _write_normalized_song(extracted_dir: Path, normalized_dir: Path) -> Convers
     return ConversionReport(
         input_path=str(extracted_dir),
         output_path="",
+        input_format=input_format,
+        output_format=OUTPUT_FORMAT_FOLDER,
         title=manifest["title"],
         artist=manifest["artist"],
-        arrangement_count=len(arr_manifest),
+        arrangement_count=len(arrangement_manifest),
         arrangement_names=arrangement_names,
         stem_files=stem_files,
         work_root=str(normalized_dir.parent.parent.resolve()),
@@ -355,32 +440,113 @@ def _write_normalized_song(extracted_dir: Path, normalized_dir: Path) -> Convers
     )
 
 
-def convert_input_to_chart_package(input_path: str | Path, output_path: str | Path, work_root: str | Path | None = None) -> ConversionReport:
-    src = Path(input_path)
-    if not src.exists():
-        raise FileNotFoundError(src)
-    workdir = Path(work_root) if work_root else _default_work_root(src)
-    raw_dir = workdir / "raw"
+def datetime_to_iso8601() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _normalize_output_path(output_path: str | Path, output_format: str) -> Path:
+    out = Path(output_path)
+    if output_format == OUTPUT_FORMAT_FEEDBACK:
+        if out.suffix.lower() not in LEGACY_PACKAGE_EXTENSIONS:
+            out = out.with_suffix(OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDBACK])
+        return out
+    return out
+
+
+def _stage_input_as_loose_chart_folder(input_path: Path, workdir: Path, input_format: str) -> ConversionReport:
     normalized_dir = workdir / "normalized" / "song"
+    if input_format == INPUT_FORMAT_LOOSE:
+        return _summarize_existing_loose_chart_folder(input_path, normalized_dir)
+
+    raw_dir = workdir / "raw"
     build_dir = workdir / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
-
     if raw_dir.exists():
         shutil.rmtree(raw_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
-    unpack_psarc(src, raw_dir)
-    report = _write_normalized_song(raw_dir, normalized_dir)
-
-    out = Path(output_path)
-    if out.suffix.lower() not in {".feedback", ".feedpak", ".sloppak"}:
-        out = out.with_suffix(".feedback")
-    package_loose_song(normalized_dir, out)
-    report.output_path = str(out.resolve())
-    report.input_path = str(src.resolve())
-    return report
+    unpack_psarc(input_path, raw_dir)
+    return _build_loose_chart_folder(raw_dir, normalized_dir, input_format=input_format)
 
 
-# Backward-compatible aliases while the tool grows beyond the original PSARC→feedpak path.
+def _summarize_existing_loose_chart_folder(input_dir: Path, normalized_dir: Path) -> ConversionReport:
+    manifest, manifest_path = _read_manifest_from_dir(input_dir)
+    arrangements_raw = manifest.get("arrangements")
+    arrangements: list[dict] = [item for item in arrangements_raw if isinstance(item, dict)] if isinstance(arrangements_raw, list) else []
+    arrangement_names = [str(item.get("name", "")) for item in arrangements]
+    stems_raw = manifest.get("stems")
+    stem_files = [str(item.get("file", "")) for item in stems_raw if isinstance(item, dict)] if isinstance(stems_raw, list) else []
+    return ConversionReport(
+        input_path=str(input_dir.resolve()),
+        output_path="",
+        input_format=INPUT_FORMAT_LOOSE,
+        output_format=OUTPUT_FORMAT_FOLDER,
+        title=str(manifest.get("title") or input_dir.name),
+        artist=str(manifest.get("artist") or ""),
+        arrangement_count=len(arrangements),
+        arrangement_names=arrangement_names,
+        stem_files=stem_files,
+        work_root=str(normalized_dir.parent.parent.resolve()),
+        manifest_path=manifest_path,
+        used_cover=(input_dir / "cover.jpg").exists(),
+        used_lyrics=(input_dir / "lyrics.json").exists(),
+    )
+
+
+def convert_chart_source(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    input_format: str | None = None,
+    output_format: str = OUTPUT_FORMAT_FEEDBACK,
+    work_root: str | Path | None = None,
+) -> ConversionReport:
+    src = Path(input_path)
+    if not src.exists():
+        raise FileNotFoundError(src)
+
+    detected_input_format = input_format or detect_input_format(src)
+    if detected_input_format not in INPUT_FORMAT_LABELS:
+        raise RuntimeError(f"Unsupported input format: {detected_input_format}")
+    if output_format not in OUTPUT_FORMAT_LABELS:
+        raise RuntimeError(f"Unsupported output format: {output_format}")
+
+    workdir = Path(work_root) if work_root else _default_work_root(src)
+    staged = _stage_input_as_loose_chart_folder(src, workdir, detected_input_format)
+
+    out = _normalize_output_path(output_path, output_format)
+    if output_format == OUTPUT_FORMAT_FEEDBACK:
+        package_loose_song(Path(staged.manifest_path).parent, out)
+    elif output_format == OUTPUT_FORMAT_FOLDER:
+        copy_loose_chart_folder(Path(staged.manifest_path).parent, out)
+    else:
+        raise RuntimeError(f"Unsupported output format: {output_format}")
+
+    return ConversionReport(
+        input_path=str(src.resolve()),
+        output_path=str(out.resolve()),
+        input_format=detected_input_format,
+        output_format=output_format,
+        title=staged.title,
+        artist=staged.artist,
+        arrangement_count=staged.arrangement_count,
+        arrangement_names=staged.arrangement_names,
+        stem_files=staged.stem_files,
+        work_root=staged.work_root,
+        manifest_path=staged.manifest_path,
+        used_cover=staged.used_cover,
+        used_lyrics=staged.used_lyrics,
+    )
+
+
+# Backward-compatible wrappers while the tool grows beyond the original path.
+def convert_input_to_chart_package(input_path: str | Path, output_path: str | Path, work_root: str | Path | None = None) -> ConversionReport:
+    return convert_chart_source(input_path, output_path, output_format=OUTPUT_FORMAT_FEEDBACK, work_root=work_root)
+
+
+# Older exported names kept for compatibility.
+PsarcInspection = InputInspection
 extract_psarc = extract_input_archive
 convert_psarc_to_feedpak = convert_input_to_chart_package
 validate_feedpak = validate_chart_package

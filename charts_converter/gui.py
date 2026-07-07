@@ -11,41 +11,77 @@ from typing import Any
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from .core import convert_input_to_chart_package, validate_chart_package
+from .core import (
+    INPUT_FORMAT_LABELS,
+    INPUT_FORMAT_LOOSE,
+    INPUT_FORMAT_PSARC,
+    OUTPUT_FORMAT_FEEDBACK,
+    OUTPUT_FORMAT_FOLDER,
+    convert_chart_source,
+    validate_chart_package,
+)
 
 
 @dataclass(frozen=True)
 class InputFormat:
+    id: str
     label: str
+    browse_kind: str
     filetypes: list[tuple[str, str]]
     preferred_suffixes: tuple[str, ...]
+    description: str
 
 
 @dataclass(frozen=True)
 class OutputFormat:
+    id: str
     label: str
     extension: str
+    browse_kind: str
     filetypes: list[tuple[str, str]]
+    description: str
 
 
 INPUT_FORMATS: dict[str, InputFormat] = {
-    "PSARC archive": InputFormat(
-        label="PSARC archive",
+    INPUT_FORMAT_LABELS[INPUT_FORMAT_PSARC]: InputFormat(
+        id=INPUT_FORMAT_PSARC,
+        label=INPUT_FORMAT_LABELS[INPUT_FORMAT_PSARC],
+        browse_kind="file",
         filetypes=[("PSARC archives", "*.psarc"), ("All files", "*")],
         preferred_suffixes=(".psarc",),
+        description="Current implemented source archive path.",
+    ),
+    INPUT_FORMAT_LABELS[INPUT_FORMAT_LOOSE]: InputFormat(
+        id=INPUT_FORMAT_LOOSE,
+        label=INPUT_FORMAT_LABELS[INPUT_FORMAT_LOOSE],
+        browse_kind="directory",
+        filetypes=[("All files", "*")],
+        preferred_suffixes=(),
+        description="Use an already-normalized chart folder with manifest.yaml.",
     ),
 }
 
 OUTPUT_FORMATS: dict[str, OutputFormat] = {
     "Feedback package": OutputFormat(
+        id=OUTPUT_FORMAT_FEEDBACK,
         label="Feedback package",
         extension=".feedback",
+        browse_kind="file",
         filetypes=[("Feedback packages", "*.feedback"), ("All files", "*")],
+        description="Create a packaged output file.",
+    ),
+    "Loose chart folder": OutputFormat(
+        id=OUTPUT_FORMAT_FOLDER,
+        label="Loose chart folder",
+        extension="",
+        browse_kind="directory",
+        filetypes=[("All files", "*")],
+        description="Create a readable folder output for inspection and follow-up tooling.",
     ),
 }
 
-DEFAULT_INPUT_FORMAT = next(iter(INPUT_FORMATS))
-DEFAULT_OUTPUT_FORMAT = next(iter(OUTPUT_FORMATS))
+DEFAULT_INPUT_FORMAT = INPUT_FORMAT_LABELS[INPUT_FORMAT_PSARC]
+DEFAULT_OUTPUT_FORMAT = "Feedback package"
 
 
 def selected_input_format(label: str) -> InputFormat:
@@ -60,13 +96,18 @@ def selected_output_extension(label: str) -> str:
     return selected_output_format(label).extension
 
 
-def suggest_output_path(input_path: str, output_extension: str = ".feedback") -> str:
+def suggest_output_path(input_path: str, output_format: OutputFormat | None = None) -> str:
     if not input_path:
         return ""
+    output_format = output_format or OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]
     src = Path(input_path)
+    if output_format.browse_kind == "directory":
+        base = src.stem if src.is_file() else src.name
+        return str(src.parent / f"{base}-charts") if src.is_file() else str(src.parent / f"{src.name}-export")
+    extension = output_format.extension or ".feedback"
     if src.is_dir():
-        return str(src / f"{src.name}{output_extension}")
-    return str(src.with_suffix(output_extension))
+        return str(src / f"{src.name}{extension}")
+    return str(src.with_suffix(extension))
 
 
 def format_report(report: Any) -> str:
@@ -77,14 +118,16 @@ class ConverterApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("charts-converter")
-        self.root.geometry("860x660")
-        self.root.minsize(780, 560)
+        self.root.geometry("920x700")
+        self.root.minsize(800, 580)
 
         self.input_format_var = tk.StringVar(value=DEFAULT_INPUT_FORMAT)
         self.input_var = tk.StringVar()
         self.output_format_var = tk.StringVar(value=DEFAULT_OUTPUT_FORMAT)
         self.output_var = tk.StringVar()
         self.work_root_var = tk.StringVar()
+        self.input_help_var = tk.StringVar(value=selected_input_format(DEFAULT_INPUT_FORMAT).description)
+        self.output_help_var = tk.StringVar(value=selected_output_format(DEFAULT_OUTPUT_FORMAT).description)
         self.status_var = tk.StringVar(value="Choose input/output types, then pick files and click Convert.")
         self._last_suggested_output = ""
         self._queue: queue.Queue[tuple[str, Any]] = queue.Queue()
@@ -92,7 +135,8 @@ class ConverterApp:
 
         self._build_ui()
         self.input_var.trace_add("write", self._sync_output_path)
-        self.output_format_var.trace_add("write", self._sync_output_path)
+        self.input_format_var.trace_add("write", self._on_input_format_changed)
+        self.output_format_var.trace_add("write", self._on_output_format_changed)
         self.root.after(100, self._drain_queue)
 
     def _build_ui(self) -> None:
@@ -106,33 +150,39 @@ class ConverterApp:
         ttk.Label(top, text="Input type").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         input_type = ttk.Combobox(top, textvariable=self.input_format_var, state="readonly", values=list(INPUT_FORMATS.keys()))
         input_type.grid(row=0, column=1, sticky="ew", pady=(0, 8))
+        ttk.Label(top, textvariable=self.input_help_var, wraplength=760, foreground="#666666").grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(0, 8)
+        )
 
-        ttk.Label(top, text="Input file").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.input_var).grid(row=1, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Browse…", command=self.choose_input).grid(row=1, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Input file").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.input_var).grid(row=2, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Browse…", command=self.choose_input).grid(row=2, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(top, text="Output type").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Label(top, text="Output type").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         output_type = ttk.Combobox(top, textvariable=self.output_format_var, state="readonly", values=list(OUTPUT_FORMATS.keys()))
-        output_type.grid(row=2, column=1, sticky="ew", pady=(0, 8))
+        output_type.grid(row=3, column=1, sticky="ew", pady=(0, 8))
+        ttk.Label(top, textvariable=self.output_help_var, wraplength=760, foreground="#666666").grid(
+            row=4, column=0, columnspan=3, sticky="w", pady=(0, 8)
+        )
 
-        ttk.Label(top, text="Output file").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.output_var).grid(row=3, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Save As…", command=self.choose_output).grid(row=3, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Output file").grid(row=5, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.output_var).grid(row=5, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Save As…", command=self.choose_output).grid(row=5, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(top, text="Scratch folder (optional)").grid(row=4, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.work_root_var).grid(row=4, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=4, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Scratch folder (optional)").grid(row=6, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.work_root_var).grid(row=6, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=6, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
         help_text = (
             "Leave Scratch folder blank to use your system cache. "
-            "More input and output formats can be added later without changing the layout."
+            "PSARC → Feedback is working now. Loose folder input/output is also wired for inspection and packaging flows."
         )
         ttk.Label(top, text=help_text, wraplength=760, foreground="#666666").grid(
-            row=5, column=0, columnspan=3, sticky="w", pady=(0, 8)
+            row=7, column=0, columnspan=3, sticky="w", pady=(0, 8)
         )
 
         button_row = ttk.Frame(top)
-        button_row.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        button_row.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         self.convert_btn = ttk.Button(button_row, text="Convert", command=self.start_convert)
         self.convert_btn.pack(side="left")
         self.validate_btn = ttk.Button(button_row, text="Validate Output", command=self.validate_output)
@@ -141,7 +191,7 @@ class ConverterApp:
         self.open_btn.pack(side="left", padx=(8, 0))
 
         status = ttk.Label(top, textvariable=self.status_var)
-        status.grid(row=7, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        status.grid(row=9, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         main = ttk.Frame(self.root, padding=(14, 0, 14, 14))
         main.grid(row=1, column=0, sticky="nsew")
@@ -169,10 +219,18 @@ class ConverterApp:
         self.validate_btn.configure(state=state)
         self.open_btn.configure(state=state)
 
+    def _on_input_format_changed(self, *_args: object) -> None:
+        self.input_help_var.set(selected_input_format(self.input_format_var.get().strip()).description)
+        self._sync_output_path()
+
+    def _on_output_format_changed(self, *_args: object) -> None:
+        self.output_help_var.set(selected_output_format(self.output_format_var.get().strip()).description)
+        self._sync_output_path()
+
     def _sync_output_path(self, *_args: object) -> None:
         suggested = suggest_output_path(
             self.input_var.get().strip(),
-            selected_output_extension(self.output_format_var.get().strip()),
+            selected_output_format(self.output_format_var.get().strip()),
         )
         current = self.output_var.get().strip()
         if not current or current == self._last_suggested_output:
@@ -181,20 +239,26 @@ class ConverterApp:
 
     def choose_input(self) -> None:
         input_format = selected_input_format(self.input_format_var.get().strip())
-        path = filedialog.askopenfilename(filetypes=input_format.filetypes)
+        if input_format.browse_kind == "directory":
+            path = filedialog.askdirectory()
+        else:
+            path = filedialog.askopenfilename(filetypes=input_format.filetypes)
         if path:
             self.input_var.set(path)
 
     def choose_output(self) -> None:
         output_format = selected_output_format(self.output_format_var.get().strip())
-        extension = output_format.extension
-        initial = self.output_var.get().strip() or suggest_output_path(self.input_var.get().strip(), extension)
-        path = filedialog.asksaveasfilename(
-            defaultextension=extension,
-            initialfile=Path(initial).name if initial else f"output{extension}",
-            initialdir=str(Path(initial).parent) if initial else None,
-            filetypes=output_format.filetypes,
-        )
+        initial = self.output_var.get().strip() or suggest_output_path(self.input_var.get().strip(), output_format)
+        if output_format.browse_kind == "directory":
+            path = filedialog.askdirectory(initialdir=str(Path(initial).parent) if initial else None)
+        else:
+            extension = output_format.extension
+            path = filedialog.asksaveasfilename(
+                defaultextension=extension,
+                initialfile=Path(initial).name if initial else f"output{extension}",
+                initialdir=str(Path(initial).parent) if initial else None,
+                filetypes=output_format.filetypes,
+            )
         if path:
             self.output_var.set(path)
 
@@ -206,6 +270,8 @@ class ConverterApp:
     def start_convert(self) -> None:
         input_path = self.input_var.get().strip()
         output_path = self.output_var.get().strip()
+        input_format = selected_input_format(self.input_format_var.get().strip())
+        output_format = selected_output_format(self.output_format_var.get().strip())
         if not input_path:
             messagebox.showerror("Missing input", "Pick an input file first.")
             return
@@ -214,24 +280,30 @@ class ConverterApp:
             return
         src = Path(input_path)
         if not src.exists():
-            messagebox.showerror("Missing input", f"File not found:\n{src}")
+            messagebox.showerror("Missing input", f"Path not found:\n{src}")
             return
-        self._append_log(f"Starting conversion: {src.name}")
+        self._append_log(f"Starting conversion: {src.name or src}")
         self.status_var.set("Converting…")
         self._set_busy(True)
         work_root = self.work_root_var.get().strip() or None
         self._worker = threading.Thread(
             target=self._run_convert,
-            args=(input_path, output_path, work_root),
+            args=(input_path, output_path, input_format.id, output_format.id, work_root),
             daemon=True,
         )
         self._worker.start()
 
-    def _run_convert(self, input_path: str, output_path: str, work_root: str | None) -> None:
+    def _run_convert(self, input_path: str, output_path: str, input_format_id: str, output_format_id: str, work_root: str | None) -> None:
         try:
-            report = convert_input_to_chart_package(input_path, output_path, work_root=work_root)
+            report = convert_chart_source(
+                input_path,
+                output_path,
+                input_format=input_format_id,
+                output_format=output_format_id,
+                work_root=work_root,
+            )
             self._queue.put(("convert_ok", report))
-        except Exception as exc:  # pragma: no cover - exercised via manual GUI path
+        except Exception as exc:  # pragma: no cover
             self._queue.put(("convert_err", exc))
 
     def validate_output(self) -> None:
@@ -253,14 +325,14 @@ class ConverterApp:
             messagebox.showerror("Missing output", "Choose an output path first.")
             return
         out = Path(output_path)
-        target = out.parent if out.suffix else out
+        target = out if out.is_dir() else out.parent
         if not target.exists():
             target = out.parent
         try:
             import subprocess
 
             subprocess.run(["open", str(target)], check=False)
-        except Exception as exc:  # pragma: no cover - OS specific
+        except Exception as exc:  # pragma: no cover
             messagebox.showerror("Open failed", str(exc))
 
     def _drain_queue(self) -> None:
@@ -272,7 +344,7 @@ class ConverterApp:
             if kind == "convert_ok":
                 report = payload
                 self._append_log("Conversion finished:\n" + format_report(report))
-                self.status_var.set(f"Done: {Path(report.output_path).name}")
+                self.status_var.set(f"Done: {Path(report.output_path).name or report.output_path}")
                 self._set_busy(False)
                 messagebox.showinfo("Conversion complete", f"Created:\n{report.output_path}")
             elif kind == "convert_err":
