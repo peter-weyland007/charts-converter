@@ -26,6 +26,7 @@ That means the packaged app/CLI can convert songs without requiring those tools 
 
 ### Input formats
 - **PSARC archive**
+- **Clone Hero song folder**
 - **Loose chart folder**
 
 ### Output formats
@@ -63,7 +64,9 @@ charts-converter extract song.psarc --work-root ./work/song
 charts-converter convert song.psarc ./out/song.feedback
 charts-converter convert song.psarc ./out/song-charts --output-format loose-chart-folder
 charts-converter convert ./normalized/song ./out/song.feedback --input-format loose-chart-folder
+charts-converter convert ./clone-hero/song-folder ./out/song.feedback --input-format clone-hero-folder
 charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedback-package
+charts-converter convert ./clone-hero-library ./out-folder --batch --input-format clone-hero-folder --output-format feedback-package
 charts-converter validate ./out/song.feedback
 charts-converter validate ./out/song-charts
 ```
@@ -76,7 +79,7 @@ charts-converter-gui
 
 The GUI currently gives you:
 - source mode selector (single input or input-folder batch)
-- input type selector
+- input type selector (PSARC, Clone Hero song folder, or loose chart folder)
 - input file/folder picker
 - output type selector
 - output file/folder picker

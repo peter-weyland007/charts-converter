@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
+import wave
 import zipfile
 from pathlib import Path
 
 from charts_converter.cli import build_parser, main as cli_main
 from charts_converter.core import (
+    INPUT_FORMAT_CLONE_HERO,
     INPUT_FORMAT_LOOSE,
     INPUT_FORMAT_PSARC,
     OUTPUT_FORMAT_FEEDBACK,
@@ -32,10 +35,64 @@ from charts_converter.gui import (
     summarize_batch_report,
 )
 
-
 PSARC_SAMPLE = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah_v1_DD_p.psarc")
 PACKAGE_SAMPLE = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah.feedpak")
 PSARC_FOLDER = Path("/Users/itadmin/Desktop/psarc test")
+CH_HELPER_ROOT = Path("/tmp/repo-inspect/ch2feedpak/ch2feedpak")
+
+
+def _make_clone_hero_song(tmp_path: Path, name: str = "clone-song") -> Path:
+    song_dir = tmp_path / name
+    song_dir.mkdir(parents=True, exist_ok=True)
+    (song_dir / "song.ini").write_text(
+        "[song]\n"
+        "name = Test Clone Song\n"
+        "artist = Hermes\n"
+        "charter = Hermes\n"
+        "delay = 0\n"
+        "diff_guitar = 3\n",
+        encoding="utf-8",
+    )
+    (song_dir / "notes.chart").write_text(
+        "[Song]\n"
+        "{\n"
+        "  Name = \"Test Clone Song\"\n"
+        "  Artist = \"Hermes\"\n"
+        "  Charter = \"Hermes\"\n"
+        "  Resolution = 192\n"
+        "  Offset = 0\n"
+        "}\n"
+        "[SyncTrack]\n"
+        "{\n"
+        "  0 = B 120000\n"
+        "}\n"
+        "[Events]\n"
+        "{\n"
+        "  0 = E \"section Intro\"\n"
+        "  0 = E \"lyric la\"\n"
+        "}\n"
+        "[ExpertSingle]\n"
+        "{\n"
+        "  0 = N 0 0\n"
+        "  192 = N 1 0\n"
+        "  384 = N 2 0\n"
+        "  576 = N 3 0\n"
+        "  768 = N 4 0\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    wav_path = song_dir / "song.wav"
+    with wave.open(str(wav_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(44100)
+        wav.writeframes(b"\x00\x00" * 44100)
+    return song_dir
+
+
+def _enable_clone_hero_helper() -> None:
+    assert CH_HELPER_ROOT.exists(), "Expected local ch2feedpak helper clone at /tmp/repo-inspect/ch2feedpak/ch2feedpak"
+    os.environ["CH2FEEDPAK_ROOT"] = str(CH_HELPER_ROOT)
 
 
 def test_inspect_reports_real_archive_shape() -> None:
@@ -90,6 +147,8 @@ def test_detect_input_format_handles_file_and_dir(tmp_path: Path) -> None:
     loose = tmp_path / "loose-song"
     loose.mkdir()
     assert detect_input_format(loose) == INPUT_FORMAT_LOOSE
+    ch_song = _make_clone_hero_song(tmp_path, "clone-hero-detect")
+    assert detect_input_format(ch_song) == INPUT_FORMAT_CLONE_HERO
 
 
 def test_discover_batch_inputs_finds_psarc_samples() -> None:
@@ -159,6 +218,41 @@ def test_cli_batch_convert_reports_results(capsys, tmp_path: Path) -> None:
     assert code == 0
     assert data["converted_count"] >= 3
     assert data["failed_count"] == 0
+
+
+def test_clone_hero_convert_to_feedback_package(tmp_path: Path) -> None:
+    _enable_clone_hero_helper()
+    song_dir = _make_clone_hero_song(tmp_path, "clone-hero-single")
+    out_file = tmp_path / "clone-hero.feedback"
+    report = convert_chart_source(song_dir, out_file, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDBACK)
+    assert report.input_format == INPUT_FORMAT_CLONE_HERO
+    assert out_file.exists()
+    validation = cli_main(["validate", str(out_file)])
+    assert validation == 0
+
+
+def test_clone_hero_convert_to_loose_folder(tmp_path: Path) -> None:
+    _enable_clone_hero_helper()
+    song_dir = _make_clone_hero_song(tmp_path, "clone-hero-loose")
+    out_dir = tmp_path / "clone-hero-loose-output"
+    report = convert_chart_source(song_dir, out_dir, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FOLDER)
+    assert report.output_format == OUTPUT_FORMAT_FOLDER
+    assert (out_dir / "manifest.yaml").exists()
+    assert any((out_dir / "arrangements").glob("*.json"))
+
+
+def test_clone_hero_batch_discovery_and_conversion(tmp_path: Path) -> None:
+    _enable_clone_hero_helper()
+    root = tmp_path / "clone-batch"
+    _make_clone_hero_song(root, "song-one")
+    _make_clone_hero_song(root, "nested/song-two")
+    hits = discover_batch_inputs(root, INPUT_FORMAT_CLONE_HERO)
+    assert len(hits) == 2
+    out_root = tmp_path / "clone-batch-out"
+    report = batch_convert_chart_sources(root, out_root, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDBACK)
+    assert report.failed_count == 0
+    assert report.converted_count == 2
+    assert len(list(out_root.glob("*.feedback"))) == 2
 
 
 def test_format_report_is_pretty_json() -> None:

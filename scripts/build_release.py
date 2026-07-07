@@ -56,7 +56,7 @@ def _prepare_runtime_tools() -> Path:
 
 def _tool_add_data_args(runtime_dir: Path) -> list[str]:
     args: list[str] = []
-    for tool_name in ["rscli", "ffmpeg", "vgmstream"]:
+    for tool_name in ["rscli", "ffmpeg", "vgmstream", "ch2feedpak"]:
         tool_dir = runtime_dir / "tools" / tool_name
         if tool_dir.exists():
             args.extend(["--add-data", f"{tool_dir}{_data_sep()}tools/{tool_name}"])

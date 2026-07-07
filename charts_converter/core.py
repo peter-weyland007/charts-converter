@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 from PIL import Image
 
+from .clonehero import clone_hero_to_loose_chart_folder, is_clone_hero_folder, iter_clone_hero_folders
 from .psarc import list_entries, unpack_psarc
 from .runtime import default_user_cache_dir, find_command
 from .song_xml import arrangement_to_wire, load_song, parse_lyrics
@@ -102,12 +103,14 @@ class BatchConversionReport:
 
 INPUT_FORMAT_PSARC = "psarc"
 INPUT_FORMAT_LOOSE = "loose-chart-folder"
+INPUT_FORMAT_CLONE_HERO = "clone-hero-folder"
 OUTPUT_FORMAT_FEEDBACK = "feedback-package"
 OUTPUT_FORMAT_FOLDER = "loose-chart-folder"
 
 INPUT_FORMAT_LABELS = {
     INPUT_FORMAT_PSARC: "PSARC archive",
     INPUT_FORMAT_LOOSE: "Loose chart folder",
+    INPUT_FORMAT_CLONE_HERO: "Clone Hero song folder",
 }
 
 OUTPUT_FORMAT_LABELS = {
@@ -144,6 +147,8 @@ def _probe_extractors() -> list[ToolProbe]:
 def detect_input_format(path: str | Path) -> str:
     p = Path(path)
     if p.is_dir():
+        if is_clone_hero_folder(p):
+            return INPUT_FORMAT_CLONE_HERO
         return INPUT_FORMAT_LOOSE
     if p.suffix.lower() == ".psarc":
         return INPUT_FORMAT_PSARC
@@ -480,6 +485,9 @@ def _stage_input_as_loose_chart_folder(input_path: Path, workdir: Path, input_fo
     normalized_dir = workdir / "normalized" / "song"
     if input_format == INPUT_FORMAT_LOOSE:
         return _summarize_existing_loose_chart_folder(input_path, normalized_dir)
+    if input_format == INPUT_FORMAT_CLONE_HERO:
+        clone_hero_to_loose_chart_folder(input_path, normalized_dir)
+        return _summarize_existing_loose_chart_folder(normalized_dir, normalized_dir)
 
     raw_dir = workdir / "raw"
     build_dir = workdir / "build"
@@ -567,6 +575,8 @@ def discover_batch_inputs(input_root: str | Path, input_format: str) -> list[Pat
         raise NotADirectoryError(root)
     if input_format == INPUT_FORMAT_PSARC:
         return sorted(p for p in root.rglob("*.psarc") if p.is_file())
+    if input_format == INPUT_FORMAT_CLONE_HERO:
+        return iter_clone_hero_folders(root)
     if input_format == INPUT_FORMAT_LOOSE:
         hits: list[Path] = []
         for manifest in sorted(root.rglob("manifest.y*ml")):

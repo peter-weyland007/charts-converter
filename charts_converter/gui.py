@@ -13,6 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .core import (
     INPUT_FORMAT_LABELS,
+    INPUT_FORMAT_CLONE_HERO,
     INPUT_FORMAT_LOOSE,
     INPUT_FORMAT_PSARC,
     OUTPUT_FORMAT_FEEDBACK,
@@ -63,6 +64,14 @@ INPUT_FORMATS: dict[str, InputFormat] = {
         filetypes=[("All files", "*")],
         preferred_suffixes=(),
         description="Single normalized chart folder with manifest.yaml.",
+    ),
+    INPUT_FORMAT_LABELS[INPUT_FORMAT_CLONE_HERO]: InputFormat(
+        id=INPUT_FORMAT_CLONE_HERO,
+        label=INPUT_FORMAT_LABELS[INPUT_FORMAT_CLONE_HERO],
+        browse_kind="directory",
+        filetypes=[("All files", "*")],
+        preferred_suffixes=(),
+        description="Clone Hero song folder with notes.chart or notes.mid plus audio files.",
     ),
 }
 
@@ -257,7 +266,19 @@ class ConverterApp:
 
     def _refresh_mode_labels(self) -> None:
         batch_mode = self.source_mode_var.get().strip() == SOURCE_MODE_BATCH
-        self.input_label_var.set("Input folder" if batch_mode else "Input file")
+        input_format = selected_input_format(self.input_format_var.get().strip())
+        if batch_mode:
+            if input_format.id == INPUT_FORMAT_CLONE_HERO:
+                self.input_label_var.set("Input library folder")
+            else:
+                self.input_label_var.set("Input folder")
+        else:
+            if input_format.id == INPUT_FORMAT_CLONE_HERO:
+                self.input_label_var.set("Song folder")
+            elif input_format.id == INPUT_FORMAT_LOOSE:
+                self.input_label_var.set("Chart folder")
+            else:
+                self.input_label_var.set("Input file")
         self.output_label_var.set("Output folder" if batch_mode else "Output file")
         self.output_button_var.set("Choose Folder…" if batch_mode else "Save As…")
         self._sync_output_path()
@@ -267,6 +288,8 @@ class ConverterApp:
         batch_mode = self.source_mode_var.get().strip() == SOURCE_MODE_BATCH
         if batch_mode and input_format.id == INPUT_FORMAT_LOOSE:
             self.input_help_var.set("Batch mode will scan subfolders for manifest.yaml and convert each loose chart folder it finds.")
+        elif batch_mode and input_format.id == INPUT_FORMAT_CLONE_HERO:
+            self.input_help_var.set("Batch mode will scan subfolders for Clone Hero songs containing notes.chart or notes.mid and convert each one it finds.")
         else:
             self.input_help_var.set(input_format.description)
         self._refresh_mode_labels()

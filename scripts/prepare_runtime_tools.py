@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 THIRD_PARTY_RSCLI = ROOT / "third_party" / "rscli-source"
 ROCKSMITH_REPO = "https://github.com/iminashi/Rocksmith2014.NET.git"
 VGMSTREAM_VERSION = "r2117"
+CH2FEEDPAK_REPO = "https://github.com/zaibach333/ch2feedpak.git"
 
 
 def platform_tag() -> str:
@@ -130,6 +131,22 @@ def prepare_rscli(out_root: Path) -> Path:
         return exe
 
 
+def prepare_ch2feedpak(out_root: Path) -> Path:
+    if not shutil.which("git"):
+        raise RuntimeError("git is required to bundle ch2feedpak")
+    with tempfile.TemporaryDirectory(prefix="charts_converter_ch2feedpak_") as td:
+        repo_dir = Path(td) / "ch2feedpak"
+        subprocess.run(["git", "clone", "--depth", "1", CH2FEEDPAK_REPO, str(repo_dir)], check=True)
+        src_dir = repo_dir / "ch2feedpak"
+        if not (src_dir / "ch2feedpak.py").exists():
+            raise RuntimeError(f"ch2feedpak helper layout unexpected: {src_dir}")
+        dest_dir = out_root / "tools" / "ch2feedpak"
+        if dest_dir.exists():
+            shutil.rmtree(dest_dir)
+        shutil.copytree(src_dir, dest_dir)
+        return dest_dir / "ch2feedpak.py"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prepare bundled runtime tools for the current platform")
     parser.add_argument("--output-dir", required=True, help="Directory where tools/ will be staged")
@@ -141,11 +158,13 @@ def main(argv: list[str] | None = None) -> int:
     ffmpeg = prepare_ffmpeg(out_root)
     vgmstream = prepare_vgmstream(out_root)
     rscli = prepare_rscli(out_root)
+    ch2feedpak = prepare_ch2feedpak(out_root)
 
     print("Prepared runtime tools:")
     print(ffmpeg)
     print(vgmstream)
     print(rscli)
+    print(ch2feedpak)
     return 0
 
 
