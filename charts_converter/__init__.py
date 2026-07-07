@@ -1,4 +1,6 @@
 from .core import (
+    BatchConversionReport,
+    BatchItemResult,
     ConversionReport,
     ExtractionReport,
     InputInspection,
@@ -10,10 +12,12 @@ from .core import (
     OUTPUT_FORMAT_FEEDBACK,
     OUTPUT_FORMAT_FOLDER,
     OUTPUT_FORMAT_LABELS,
+    batch_convert_chart_sources,
     convert_chart_source,
     convert_input_to_chart_package,
     copy_loose_chart_folder,
     detect_input_format,
+    discover_batch_inputs,
     extract_input_archive,
     inspect_input_file,
     package_loose_song,
@@ -21,6 +25,8 @@ from .core import (
 )
 
 __all__ = [
+    "BatchConversionReport",
+    "BatchItemResult",
     "ConversionReport",
     "ExtractionReport",
     "InputInspection",
@@ -32,10 +38,12 @@ __all__ = [
     "OUTPUT_FORMAT_FEEDBACK",
     "OUTPUT_FORMAT_FOLDER",
     "OUTPUT_FORMAT_LABELS",
+    "batch_convert_chart_sources",
     "convert_chart_source",
     "convert_input_to_chart_package",
     "copy_loose_chart_folder",
     "detect_input_format",
+    "discover_batch_inputs",
     "extract_input_archive",
     "inspect_input_file",
     "package_loose_song",

@@ -7,6 +7,7 @@ from dataclasses import asdict
 from .core import (
     INPUT_FORMAT_LABELS,
     OUTPUT_FORMAT_LABELS,
+    batch_convert_chart_sources,
     convert_chart_source,
     extract_input_archive,
     inspect_input_file,
@@ -31,6 +32,17 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
+    if args.batch:
+        report = batch_convert_chart_sources(
+            args.input,
+            args.output,
+            input_format=args.input_format,
+            output_format=args.output_format,
+            work_root=args.work_root,
+        )
+        _print_json(asdict(report))
+        return 0 if report.failed_count == 0 else 1
+
     report = convert_chart_source(
         args.input,
         args.output,
@@ -65,10 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
     extract_p.set_defaults(func=cmd_extract)
 
     convert_p = sub.add_parser("convert", help="Convert an input source into either a packaged file or a loose chart folder.")
-    convert_p.add_argument("input", help="Path to an input file or loose chart folder")
-    convert_p.add_argument("output", help="Destination output path")
-    convert_p.add_argument("--input-format", choices=sorted(INPUT_FORMAT_LABELS.keys()), help="Override detected input format")
+    convert_p.add_argument("input", help="Path to an input file, loose chart folder, or batch input folder")
+    convert_p.add_argument("output", help="Destination output path or batch output folder")
+    convert_p.add_argument("--input-format", choices=sorted(INPUT_FORMAT_LABELS.keys()), default="psarc", help="Override detected input format")
     convert_p.add_argument("--output-format", choices=sorted(OUTPUT_FORMAT_LABELS.keys()), default="feedback-package", help="Choose the output shape")
+    convert_p.add_argument("--batch", action="store_true", help="Treat input as a folder and batch-convert all discovered inputs of the selected input format")
     convert_p.add_argument("--work-root", help="Workspace root for staged conversion data")
     convert_p.set_defaults(func=cmd_convert)
 

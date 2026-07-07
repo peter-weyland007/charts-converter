@@ -63,6 +63,7 @@ charts-converter extract song.psarc --work-root ./work/song
 charts-converter convert song.psarc ./out/song.feedback
 charts-converter convert song.psarc ./out/song-charts --output-format loose-chart-folder
 charts-converter convert ./normalized/song ./out/song.feedback --input-format loose-chart-folder
+charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedback-package
 charts-converter validate ./out/song.feedback
 charts-converter validate ./out/song-charts
 ```
@@ -74,6 +75,7 @@ charts-converter-gui
 ```
 
 The GUI currently gives you:
+- source mode selector (single input or input-folder batch)
 - input type selector
 - input file/folder picker
 - output type selector

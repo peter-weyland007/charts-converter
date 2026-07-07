@@ -79,6 +79,27 @@ class ConversionReport:
     used_lyrics: bool
 
 
+@dataclass(frozen=True)
+class BatchItemResult:
+    input_path: str
+    output_path: str | None
+    ok: bool
+    error: str | None
+    report: ConversionReport | None
+
+
+@dataclass(frozen=True)
+class BatchConversionReport:
+    input_root: str
+    output_root: str
+    input_format: str
+    output_format: str
+    discovered_inputs: int
+    converted_count: int
+    failed_count: int
+    items: list[BatchItemResult]
+
+
 INPUT_FORMAT_PSARC = "psarc"
 INPUT_FORMAT_LOOSE = "loose-chart-folder"
 OUTPUT_FORMAT_FEEDBACK = "feedback-package"
@@ -537,6 +558,103 @@ def convert_chart_source(
         manifest_path=staged.manifest_path,
         used_cover=staged.used_cover,
         used_lyrics=staged.used_lyrics,
+    )
+
+
+def discover_batch_inputs(input_root: str | Path, input_format: str) -> list[Path]:
+    root = Path(input_root)
+    if not root.is_dir():
+        raise NotADirectoryError(root)
+    if input_format == INPUT_FORMAT_PSARC:
+        return sorted(p for p in root.rglob("*.psarc") if p.is_file())
+    if input_format == INPUT_FORMAT_LOOSE:
+        hits: list[Path] = []
+        for manifest in sorted(root.rglob("manifest.y*ml")):
+            parent = manifest.parent
+            if parent.is_dir() and parent not in hits:
+                hits.append(parent)
+        return hits
+    raise RuntimeError(f"Unsupported input format for batch discovery: {input_format}")
+
+
+def _sanitize_name(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value.strip())
+    while "--" in cleaned:
+        cleaned = cleaned.replace("--", "-")
+    cleaned = cleaned.strip("-_")
+    return cleaned or "converted"
+
+
+def _batch_output_path(output_root: Path, source_path: Path, output_format: str) -> Path:
+    base_name = _sanitize_name(source_path.stem if source_path.is_file() else source_path.name)
+    if output_format == OUTPUT_FORMAT_FEEDBACK:
+        return output_root / f"{base_name}{OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDBACK]}"
+    if output_format == OUTPUT_FORMAT_FOLDER:
+        return output_root / base_name
+    raise RuntimeError(f"Unsupported output format: {output_format}")
+
+
+def batch_convert_chart_sources(
+    input_root: str | Path,
+    output_root: str | Path,
+    *,
+    input_format: str,
+    output_format: str,
+    work_root: str | Path | None = None,
+) -> BatchConversionReport:
+    root = Path(input_root)
+    out_root = Path(output_root)
+    if not root.is_dir():
+        raise NotADirectoryError(root)
+    if output_format not in OUTPUT_FORMAT_LABELS:
+        raise RuntimeError(f"Unsupported output format: {output_format}")
+
+    discovered = discover_batch_inputs(root, input_format)
+    out_root.mkdir(parents=True, exist_ok=True)
+    items: list[BatchItemResult] = []
+
+    for source in discovered:
+        target = _batch_output_path(out_root, source, output_format)
+        item_work_root = (Path(work_root) / _sanitize_name(source.stem if source.is_file() else source.name)) if work_root else None
+        try:
+            report = convert_chart_source(
+                source,
+                target,
+                input_format=input_format,
+                output_format=output_format,
+                work_root=item_work_root,
+            )
+            items.append(
+                BatchItemResult(
+                    input_path=str(source.resolve()),
+                    output_path=report.output_path,
+                    ok=True,
+                    error=None,
+                    report=report,
+                )
+            )
+        except Exception as exc:
+            items.append(
+                BatchItemResult(
+                    input_path=str(source.resolve()),
+                    output_path=str(target.resolve()),
+                    ok=False,
+                    error=str(exc),
+                    report=None,
+                )
+            )
+
+    converted_count = sum(1 for item in items if item.ok)
+    failed_count = len(items) - converted_count
+    return BatchConversionReport(
+        input_root=str(root.resolve()),
+        output_root=str(out_root.resolve()),
+        input_format=input_format,
+        output_format=output_format,
+        discovered_inputs=len(discovered),
+        converted_count=converted_count,
+        failed_count=failed_count,
+        items=items,
     )
 
 

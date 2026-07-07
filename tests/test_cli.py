@@ -11,25 +11,31 @@ from charts_converter.core import (
     OUTPUT_FORMAT_FEEDBACK,
     OUTPUT_FORMAT_FOLDER,
     _default_work_root,
+    batch_convert_chart_sources,
     convert_chart_source,
     detect_input_format,
+    discover_batch_inputs,
     inspect_input_file,
 )
 from charts_converter.gui import (
     DEFAULT_INPUT_FORMAT,
     DEFAULT_OUTPUT_FORMAT,
+    DEFAULT_SOURCE_MODE,
     INPUT_FORMATS,
     OUTPUT_FORMATS,
+    SOURCE_MODE_BATCH,
     format_report,
     main as gui_main,
     selected_input_format,
     selected_output_extension,
     suggest_output_path,
+    summarize_batch_report,
 )
 
 
 PSARC_SAMPLE = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah_v1_DD_p.psarc")
 PACKAGE_SAMPLE = Path("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah.feedpak")
+PSARC_FOLDER = Path("/Users/itadmin/Desktop/psarc test")
 
 
 def test_inspect_reports_real_archive_shape() -> None:
@@ -59,7 +65,12 @@ def test_generated_package_contains_manifest_and_audio() -> None:
 def test_input_and_output_format_defaults_are_configured() -> None:
     assert selected_input_format(DEFAULT_INPUT_FORMAT) == INPUT_FORMATS[DEFAULT_INPUT_FORMAT]
     assert selected_output_extension(DEFAULT_OUTPUT_FORMAT) == OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT].extension
-    assert suggest_output_path("/tmp/test-song.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]).endswith(".feedback")
+    assert suggest_output_path("/tmp/test-song.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE).endswith(".feedback")
+
+
+def test_batch_mode_suggests_output_folder() -> None:
+    suggested = suggest_output_path("/tmp/song-inputs", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], SOURCE_MODE_BATCH)
+    assert suggested.endswith("song-inputs-converted")
 
 
 def test_default_work_root_uses_user_cache_dir() -> None:
@@ -81,6 +92,12 @@ def test_detect_input_format_handles_file_and_dir(tmp_path: Path) -> None:
     assert detect_input_format(loose) == INPUT_FORMAT_LOOSE
 
 
+def test_discover_batch_inputs_finds_psarc_samples() -> None:
+    hits = discover_batch_inputs(PSARC_FOLDER, INPUT_FORMAT_PSARC)
+    assert len(hits) >= 3
+    assert all(path.suffix.lower() == ".psarc" for path in hits)
+
+
 def test_convert_psarc_to_loose_chart_folder(tmp_path: Path) -> None:
     out_dir = tmp_path / "hallelujah-charts"
     report = convert_chart_source(PSARC_SAMPLE, out_dir, output_format=OUTPUT_FORMAT_FOLDER)
@@ -99,11 +116,69 @@ def test_convert_loose_chart_folder_to_feedback_package(tmp_path: Path) -> None:
     assert out_file.exists()
 
 
+def test_batch_convert_psarc_folder_to_feedback(tmp_path: Path) -> None:
+    out_root = tmp_path / "batch-feedback"
+    report = batch_convert_chart_sources(
+        PSARC_FOLDER,
+        out_root,
+        input_format=INPUT_FORMAT_PSARC,
+        output_format=OUTPUT_FORMAT_FEEDBACK,
+    )
+    assert report.discovered_inputs >= 3
+    assert report.failed_count == 0
+    assert report.converted_count == report.discovered_inputs
+    assert (out_root / "Paramore_Hallelujah_v1_DD_p.feedback").exists()
+
+
+def test_batch_convert_psarc_folder_to_loose_folders(tmp_path: Path) -> None:
+    out_root = tmp_path / "batch-folders"
+    report = batch_convert_chart_sources(
+        PSARC_FOLDER,
+        out_root,
+        input_format=INPUT_FORMAT_PSARC,
+        output_format=OUTPUT_FORMAT_FOLDER,
+    )
+    assert report.failed_count == 0
+    assert (out_root / "Paramore_Hallelujah_v1_DD_p" / "manifest.yaml").exists()
+
+
+def test_cli_batch_convert_reports_results(capsys, tmp_path: Path) -> None:
+    out_root = tmp_path / "cli-batch"
+    code = cli_main([
+        "convert",
+        str(PSARC_FOLDER),
+        str(out_root),
+        "--batch",
+        "--input-format",
+        "psarc",
+        "--output-format",
+        "feedback-package",
+    ])
+    captured = capsys.readouterr().out
+    data = json.loads(captured)
+    assert code == 0
+    assert data["converted_count"] >= 3
+    assert data["failed_count"] == 0
+
+
 def test_format_report_is_pretty_json() -> None:
     report = inspect_input_file(PSARC_SAMPLE)
     rendered = format_report(report)
     assert '"entry_count"' in rendered
     assert rendered.startswith("{")
+
+
+def test_batch_summary_mentions_counts(tmp_path: Path) -> None:
+    out_root = tmp_path / "summary-batch"
+    report = batch_convert_chart_sources(
+        PSARC_FOLDER,
+        out_root,
+        input_format=INPUT_FORMAT_PSARC,
+        output_format=OUTPUT_FORMAT_FEEDBACK,
+    )
+    summary = summarize_batch_report(report)
+    assert "Discovered:" in summary
+    assert "Converted:" in summary
 
 
 def test_gui_smoke_test_returns_zero() -> None:
