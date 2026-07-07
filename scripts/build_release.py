@@ -4,6 +4,7 @@ import argparse
 import os
 import platform
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -28,10 +29,21 @@ def _pyinstaller() -> list[str]:
     return [sys.executable, "-m", "PyInstaller"]
 
 
+def _rmtree_safe(path: Path) -> None:
+    def onerror(func, value, _exc_info):
+        try:
+            os.chmod(value, stat.S_IRWXU)
+        except Exception:
+            pass
+        func(value)
+
+    shutil.rmtree(path, onerror=onerror)
+
+
 def _prepare_runtime_tools() -> Path:
     out_dir = RUNTIME_ROOT / _platform_tag()
     if out_dir.exists():
-        shutil.rmtree(out_dir)
+        _rmtree_safe(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run([
         sys.executable,
@@ -99,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
 
     dist_dir = Path(args.output_dir) if args.output_dir else DIST_ROOT / _platform_tag()
     if dist_dir.exists():
-        shutil.rmtree(dist_dir)
+        _rmtree_safe(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
     (BUILD_ROOT / "specs").mkdir(parents=True, exist_ok=True)
 
