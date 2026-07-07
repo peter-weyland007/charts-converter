@@ -368,8 +368,8 @@ def convert_psarc_to_feedpak(input_path: str | Path, output_path: str | Path, wo
     report = _write_normalized_song(raw_dir, normalized_dir)
 
     out = Path(output_path)
-    if out.suffix.lower() not in {".feedpak", ".sloppak"}:
-        out = out.with_suffix(".feedpak")
+    if out.suffix.lower() not in {".feedback", ".feedpak", ".sloppak"}:
+        out = out.with_suffix(".feedback")
     package_loose_song(normalized_dir, out)
     report.output_path = str(out.resolve())
     report.input_path = str(src.resolve())

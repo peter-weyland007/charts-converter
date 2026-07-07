@@ -84,14 +84,14 @@ def _common_args(name: str, dist_dir: Path, console: bool, runtime_dir: Path) ->
 
 
 def build_cli(dist_dir: Path, runtime_dir: Path) -> Path:
-    name = "psarc-converter-cli"
+    name = "charts-converter-cli"
     cmd = _common_args(name, dist_dir, console=True, runtime_dir=runtime_dir) + ["scripts/pyinstaller_cli_entry.py"]
     subprocess.run(cmd, cwd=ROOT, check=True)
     return dist_dir / name
 
 
 def build_gui(dist_dir: Path, runtime_dir: Path) -> Path:
-    name = "psarc-converter"
+    name = "charts-converter"
     cmd = _common_args(name, dist_dir, console=False, runtime_dir=runtime_dir) + ["scripts/pyinstaller_gui_entry.py"]
     subprocess.run(cmd, cwd=ROOT, check=True)
     if sys.platform == "darwin":
@@ -100,7 +100,7 @@ def build_gui(dist_dir: Path, runtime_dir: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build psarc-converter desktop/CLI executables with PyInstaller")
+    parser = argparse.ArgumentParser(description="Build charts-converter desktop/CLI executables with PyInstaller")
     parser.add_argument("--cli-only", action="store_true", help="Build only the CLI executable")
     parser.add_argument("--gui-only", action="store_true", help="Build only the GUI executable")
     parser.add_argument("--output-dir", default=None, help="Override release output directory")

@@ -50,28 +50,28 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="psarc-converter",
-        description="Convert Rocksmith PSARC files into feedpak packages.",
+        prog="charts-converter",
+        description="Convert supported chart inputs into packaged output files.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    inspect_p = sub.add_parser("inspect", help="Inspect a candidate .psarc file and list archive contents.")
-    inspect_p.add_argument("input", help="Path to a .psarc file")
+    inspect_p = sub.add_parser("inspect", help="Inspect a candidate input file and list archive contents.")
+    inspect_p.add_argument("input", help="Path to an input file")
     inspect_p.set_defaults(func=cmd_inspect)
 
-    extract_p = sub.add_parser("extract", help="Extract a .psarc into a raw workspace folder.")
-    extract_p.add_argument("input", help="Path to a .psarc file")
+    extract_p = sub.add_parser("extract", help="Extract an input archive into a raw workspace folder.")
+    extract_p.add_argument("input", help="Path to an input file")
     extract_p.add_argument("--work-root", help="Workspace root for raw/ normalized/ build/ folders")
     extract_p.set_defaults(func=cmd_extract)
 
-    convert_p = sub.add_parser("convert", help="Convert a .psarc to .feedpak, or package an existing loose song dir.")
-    convert_p.add_argument("input", help="Path to a .psarc file or loose song dir")
-    convert_p.add_argument("output", help="Destination .feedpak path")
+    convert_p = sub.add_parser("convert", help="Convert a supported input file to a packaged output file, or package an existing loose song dir.")
+    convert_p.add_argument("input", help="Path to an input file or loose song dir")
+    convert_p.add_argument("output", help="Destination output path")
     convert_p.add_argument("--work-root", help="Workspace root for staged conversion data")
     convert_p.set_defaults(func=cmd_convert)
 
-    validate_p = sub.add_parser("validate", help="Validate a .feedpak or loose package by checking its manifest.")
-    validate_p.add_argument("input", help="Path to a .feedpak/.sloppak file or loose directory")
+    validate_p = sub.add_parser("validate", help="Validate a packaged output file or loose package by checking its manifest.")
+    validate_p.add_argument("input", help="Path to a packaged output file or loose directory")
     validate_p.set_defaults(func=cmd_validate)
 
     return parser

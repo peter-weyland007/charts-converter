@@ -4,9 +4,15 @@ import json
 import zipfile
 from pathlib import Path
 
-from psarc_converter.cli import main as cli_main
+from psarc_converter.cli import build_parser, main as cli_main
 from psarc_converter.core import _default_work_root, inspect_psarc
-from psarc_converter.gui import format_report, main as gui_main, suggest_output_path
+from psarc_converter.gui import (
+    DEFAULT_OUTPUT_FORMAT,
+    format_report,
+    main as gui_main,
+    selected_output_extension,
+    suggest_output_path,
+)
 
 
 def test_inspect_reports_real_psarc_shape() -> None:
@@ -35,8 +41,10 @@ def test_generated_feedpak_contains_manifest_and_audio() -> None:
     assert "stems/full.ogg" in names
 
 
-def test_suggest_output_path_uses_feedpak_suffix() -> None:
-    assert suggest_output_path("/tmp/test-song.psarc") == "/tmp/test-song.feedpak"
+def test_suggest_output_path_uses_selected_extension() -> None:
+    assert selected_output_extension(DEFAULT_OUTPUT_FORMAT) == ".feedback"
+    assert suggest_output_path("/tmp/test-song.psarc", ".feedback") == "/tmp/test-song.feedback"
+
 
 
 def test_default_work_root_uses_user_cache_dir() -> None:
@@ -46,11 +54,19 @@ def test_default_work_root_uses_user_cache_dir() -> None:
     assert "/.cache/" in str(path) or "/Library/Caches/" in str(path) or "AppData" in str(path)
 
 
+
+def test_cli_prog_uses_charts_converter_name() -> None:
+    parser = build_parser()
+    assert parser.prog == "charts-converter"
+
+
+
 def test_format_report_is_pretty_json() -> None:
     report = inspect_psarc("/Users/itadmin/Desktop/psarc test/Paramore_Hallelujah_v1_DD_p.psarc")
     rendered = format_report(report)
     assert '"entry_count"' in rendered
     assert rendered.startswith("{")
+
 
 
 def test_gui_smoke_test_returns_zero() -> None:
