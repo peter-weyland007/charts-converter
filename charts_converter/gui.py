@@ -111,22 +111,35 @@ def selected_output_extension(label: str) -> str:
     return selected_output_format(label).extension
 
 
+def suggested_output_name(input_path: str, output_format: OutputFormat | None = None) -> str:
+    if not input_path:
+        return ""
+    output_format = output_format or OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]
+    src = Path(input_path)
+    looks_like_file = src.is_file() or bool(src.suffix)
+    if output_format.browse_kind == "directory":
+        base = src.stem if looks_like_file else src.name
+        return f"{base}-charts" if looks_like_file else f"{src.name}-export"
+    extension = output_format.extension or ".feedback"
+    base = src.stem if looks_like_file else src.name
+    return f"{base}{extension}"
+
+
 def suggest_output_path(input_path: str, output_format: OutputFormat | None = None, source_mode: str = DEFAULT_SOURCE_MODE) -> str:
     if not input_path:
         return ""
     output_format = output_format or OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]
     src = Path(input_path)
+    looks_like_file = src.is_file() or bool(src.suffix)
     if source_mode == SOURCE_MODE_BATCH:
         parent = src.parent if src.parent != Path("") else Path.cwd()
         name = src.name or src.stem or "batch-inputs"
         return str(parent / f"{name}-converted")
     if output_format.browse_kind == "directory":
-        base = src.stem if src.is_file() else src.name
-        return str(src.parent / f"{base}-charts") if src.is_file() else str(src.parent / f"{src.name}-export")
-    extension = output_format.extension or ".feedback"
-    if src.is_dir():
-        return str(src / f"{src.name}{extension}")
-    return str(src.with_suffix(extension))
+        return str(src.parent / suggested_output_name(input_path, output_format))
+    if looks_like_file:
+        return str(src.parent / suggested_output_name(input_path, output_format))
+    return str(src / suggested_output_name(input_path, output_format))
 
 
 def format_report(report: Any) -> str:
@@ -279,8 +292,8 @@ class ConverterApp:
                 self.input_label_var.set("Chart folder")
             else:
                 self.input_label_var.set("Input file")
-        self.output_label_var.set("Output folder" if batch_mode else "Output file")
-        self.output_button_var.set("Choose Folder…" if batch_mode else "Save As…")
+        self.output_label_var.set("Output folder" if batch_mode else "Output target")
+        self.output_button_var.set("Choose Folder…")
         self._sync_output_path()
 
     def _on_source_mode_changed(self, *_args: object) -> None:
@@ -302,20 +315,29 @@ class ConverterApp:
         batch_mode = self.source_mode_var.get().strip() == SOURCE_MODE_BATCH
         if batch_mode:
             self.output_help_var.set(f"Batch mode writes one {output_format.label.lower()} per discovered input into the chosen output folder.")
-        else:
+        elif output_format.browse_kind == "directory":
             self.output_help_var.set(output_format.description)
+        else:
+            self.output_help_var.set("Choose an output folder. The converter will reuse the input filename automatically and only change the extension.")
         self._refresh_mode_labels()
 
     def _sync_output_path(self, *_args: object) -> None:
+        output_format = selected_output_format(self.output_format_var.get().strip())
+        source_mode = self.source_mode_var.get().strip()
         suggested = suggest_output_path(
             self.input_var.get().strip(),
-            selected_output_format(self.output_format_var.get().strip()),
-            self.source_mode_var.get().strip(),
+            output_format,
+            source_mode,
         )
         current = self.output_var.get().strip()
         if not current or current == self._last_suggested_output:
             self.output_var.set(suggested)
-        self._last_suggested_output = suggested
+        elif source_mode != SOURCE_MODE_BATCH and output_format.browse_kind != "directory":
+            current_path = Path(current)
+            folder = current_path if current_path.is_dir() else current_path.parent
+            if str(folder).strip():
+                self.output_var.set(str(folder / suggested_output_name(self.input_var.get().strip(), output_format)))
+        self._last_suggested_output = self.output_var.get().strip() or suggested
 
     def choose_input(self) -> None:
         batch_mode = self.source_mode_var.get().strip() == SOURCE_MODE_BATCH
@@ -330,19 +352,17 @@ class ConverterApp:
     def choose_output(self) -> None:
         output_format = selected_output_format(self.output_format_var.get().strip())
         batch_mode = self.source_mode_var.get().strip() == SOURCE_MODE_BATCH
-        initial = self.output_var.get().strip() or suggest_output_path(self.input_var.get().strip(), output_format, self.source_mode_var.get().strip())
+        input_path = self.input_var.get().strip()
+        initial = self.output_var.get().strip() or suggest_output_path(input_path, output_format, self.source_mode_var.get().strip())
+        initial_dir = str(Path(initial).parent) if initial else None
         if batch_mode or output_format.browse_kind == "directory":
-            path = filedialog.askdirectory(initialdir=str(Path(initial).parent) if initial else None)
-        else:
-            extension = output_format.extension
-            path = filedialog.asksaveasfilename(
-                defaultextension=extension,
-                initialfile=Path(initial).name if initial else f"output{extension}",
-                initialdir=str(Path(initial).parent) if initial else None,
-                filetypes=output_format.filetypes,
-            )
-        if path:
-            self.output_var.set(path)
+            path = filedialog.askdirectory(initialdir=initial_dir)
+            if path:
+                self.output_var.set(path)
+            return
+        folder = filedialog.askdirectory(initialdir=initial_dir)
+        if folder:
+            self.output_var.set(str(Path(folder) / suggested_output_name(input_path, output_format)))
 
     def choose_work_root(self) -> None:
         path = filedialog.askdirectory()
@@ -369,6 +389,11 @@ class ConverterApp:
         if batch_mode and not src.is_dir():
             messagebox.showerror("Batch mode requires folder", "Choose an input folder for batch conversion.")
             return
+        if not batch_mode and output_format.browse_kind != "directory":
+            out_candidate = Path(output_path)
+            if out_candidate.is_dir() or (not out_candidate.suffix and output_format.extension):
+                output_path = str(out_candidate / suggested_output_name(input_path, output_format))
+                self.output_var.set(output_path)
         self._append_log(f"Starting conversion: {src}")
         self.status_var.set("Converting…")
         self._set_busy(True)

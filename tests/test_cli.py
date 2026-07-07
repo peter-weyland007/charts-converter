@@ -32,6 +32,7 @@ from charts_converter.gui import (
     selected_input_format,
     selected_output_extension,
     suggest_output_path,
+    suggested_output_name,
     summarize_batch_report,
 )
 
@@ -128,6 +129,23 @@ def test_input_and_output_format_defaults_are_configured() -> None:
 def test_batch_mode_suggests_output_folder() -> None:
     suggested = suggest_output_path("/tmp/song-inputs", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], SOURCE_MODE_BATCH)
     assert suggested.endswith("song-inputs-converted")
+
+
+def test_single_file_output_uses_input_basename_in_same_folder() -> None:
+    suggested = suggest_output_path("/tmp/Weezer.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE)
+    assert suggested == "/tmp/Weezer.feedback"
+    assert suggested_output_name("/tmp/Weezer.psarc", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]) == "Weezer.feedback"
+
+
+def test_clone_hero_single_file_output_uses_folder_name() -> None:
+    suggested = suggest_output_path("/tmp/My Song", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT], DEFAULT_SOURCE_MODE)
+    assert suggested == "/tmp/My Song/My Song.feedback"
+    assert suggested_output_name("/tmp/My Song", OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT]) == "My Song.feedback"
+
+
+def test_single_folder_output_uses_input_basename() -> None:
+    suggested = suggest_output_path("/tmp/Weezer.psarc", OUTPUT_FORMATS["Loose chart folder"], DEFAULT_SOURCE_MODE)
+    assert suggested == "/tmp/Weezer-charts"
 
 
 def test_default_work_root_uses_user_cache_dir() -> None:
