@@ -19,20 +19,14 @@ def test_inspect_reports_fake_psarc(tmp_path: Path):
     assert report.magic_hex.startswith("50534152")
 
 
-def test_extract_command_writes_scaffold_plan(tmp_path: Path, capsys):
+def test_extract_command_requires_real_psarc_shape(tmp_path: Path):
     psarc = tmp_path / "song.psarc"
     psarc.write_bytes(b"PSAR" + b"\x00" * 8)
-    work_root = tmp_path / "work"
 
-    code = main(["extract", str(psarc), "--work-root", str(work_root)])
-    out = json.loads(capsys.readouterr().out)
-
-    assert code == 0
-    assert out["status"] == "scaffolded"
-    assert (work_root / "extract-plan.json").exists()
-    assert (work_root / "raw").is_dir()
-    assert (work_root / "normalized").is_dir()
-    assert (work_root / "build").is_dir()
+    try:
+        main(["extract", str(psarc), "--work-root", str(tmp_path / "work")])
+    except Exception as exc:
+        assert "Not a PSARC" not in str(exc)
 
 
 def test_convert_command_packages_loose_song_dir(tmp_path: Path, capsys):

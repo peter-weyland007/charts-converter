@@ -6,15 +6,19 @@ Standalone converter scaffold for turning `.psarc` sources into `.feedpak` packa
 
 This repo is intentionally standalone and converter-focused.
 
-Right now it provides a real CLI surface for:
-- `inspect` — inspect a candidate `.psarc` and probe external extractor tools
-- `extract` — create a staged workspace (`raw/`, `normalized/`, `build/`)
-- `convert` — package an already-normalized loose song folder into `.feedpak`, or scaffold a `.psarc` conversion plan
+Right now it provides a working CLI for:
+- `inspect` — inspect a candidate `.psarc`, fingerprint it, and list archive contents
+- `extract` — unpack a `.psarc` into a staged raw workspace
+- `convert` — convert a `.psarc` to `.feedpak`, or package an already-normalized loose song folder
 - `validate` — validate a `.feedpak` or loose package by checking its manifest and package shape
 
-What is **not** wired yet:
-- proprietary `.psarc` extraction/decryption
-- source-specific XML/audio normalization into the intermediate folder schema
+What is currently expected on the host:
+- `ffmpeg`
+- `vgmstream-cli`
+
+What is not done yet:
+- multi-stem separation (current output is a single full-song stem)
+- broader source-format normalization beyond the Rocksmith PSARC/XML path implemented here
 
 ## Install
 
