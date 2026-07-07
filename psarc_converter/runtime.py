@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import sys
 from pathlib import Path
@@ -17,6 +18,18 @@ def app_root() -> Path:
 
 def bundled_path(*parts: str) -> Path:
     return app_root().joinpath(*parts)
+
+
+def default_user_cache_dir(app_name: str) -> Path:
+    system = platform.system().lower()
+    home = Path.home()
+    if system == "darwin":
+        root = home / "Library" / "Caches"
+    elif system == "windows":
+        root = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+    else:
+        root = Path(os.environ.get("XDG_CACHE_HOME", home / ".cache"))
+    return root / app_name
 
 
 def executable_names(base_name: str) -> list[str]:

@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 from psarc_converter.cli import main as cli_main
-from psarc_converter.core import inspect_psarc
+from psarc_converter.core import _default_work_root, inspect_psarc
 from psarc_converter.gui import format_report, main as gui_main, suggest_output_path
 
 
@@ -37,6 +37,13 @@ def test_generated_feedpak_contains_manifest_and_audio() -> None:
 
 def test_suggest_output_path_uses_feedpak_suffix() -> None:
     assert suggest_output_path("/tmp/test-song.psarc") == "/tmp/test-song.feedpak"
+
+
+def test_default_work_root_uses_user_cache_dir() -> None:
+    path = _default_work_root(Path("/Volumes/Media/Games/rocksmith-dlc/Some Song.psarc"))
+    assert "psarc-converter" in str(path)
+    assert str(path).startswith(str(Path.home()))
+    assert "/.cache/" in str(path) or "/Library/Caches/" in str(path) or "AppData" in str(path)
 
 
 def test_format_report_is_pretty_json() -> None:

@@ -14,7 +14,7 @@ import yaml
 from PIL import Image
 
 from .psarc import list_entries, unpack_psarc
-from .runtime import find_command
+from .runtime import default_user_cache_dir, find_command
 from .song_xml import arrangement_to_wire, load_song, parse_lyrics
 
 
@@ -123,7 +123,7 @@ def inspect_psarc(path: str | Path) -> PsarcInspection:
 
 
 def _default_work_root(input_path: Path) -> Path:
-    return Path(".cache") / "psarc-converter" / input_path.stem.replace(" ", "_")
+    return default_user_cache_dir("psarc-converter") / input_path.stem.replace(" ", "_")
 
 
 def _find_manifest_in_dir(src: Path) -> Path:

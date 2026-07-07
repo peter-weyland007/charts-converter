@@ -64,7 +64,7 @@ class ConverterApp:
         ttk.Entry(top, textvariable=self.output_var).grid(row=1, column=1, sticky="ew", pady=(0, 8))
         ttk.Button(top, text="Save As…", command=self.choose_output).grid(row=1, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(top, text="Work folder (optional)").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Label(top, text="Scratch folder (optional)").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         ttk.Entry(top, textvariable=self.work_root_var).grid(row=2, column=1, sticky="ew", pady=(0, 8))
         ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=2, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
