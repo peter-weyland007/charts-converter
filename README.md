@@ -1,6 +1,6 @@
-# psarc-converter
+# charts-converter
 
-Standalone converter for turning `.psarc` sources into `.feedpak` packages.
+Standalone converter for turning supported chart input files into packaged output files.
 
 ## Current state
 
@@ -9,7 +9,7 @@ This repo is intentionally standalone and converter-focused.
 Right now it provides:
 - a working **CLI** for inspect / extract / convert / validate
 - a simple **desktop GUI** that wraps the same converter core
-- real conversion coverage against multiple sample `.psarc` files
+- real conversion coverage against multiple sample input files
 - packaging for **macOS, Linux, and Windows** executables
 - self-contained release builds that bundle the converter helper tools
 
@@ -25,7 +25,7 @@ That means the packaged app/CLI can convert songs without requiring those tools 
 ## What is still not done
 
 - multi-stem separation (current output is a single full-song stem)
-- GUI polish beyond the first usable local window
+- broader input/output format support beyond the current first path
 - notarization/signing/distribution polish for consumer-facing macOS releases
 
 ## Install
@@ -47,23 +47,24 @@ pip install -e '.[build]'
 ### CLI
 
 ```bash
-psarc-converter --help
-psarc-converter inspect song.psarc
-psarc-converter extract song.psarc --work-root ./work/song
-psarc-converter convert song.psarc ./out/song.feedpak
-psarc-converter validate ./out/song.feedpak
+charts-converter --help
+charts-converter inspect song.psarc
+charts-converter extract song.psarc --work-root ./work/song
+charts-converter convert song.psarc ./out/song.feedback
+charts-converter validate ./out/song.feedback
 ```
 
 ### GUI
 
 ```bash
-psarc-converter-gui
+charts-converter-gui
 ```
 
 The GUI currently gives you:
-- PSARC file picker
+- input file picker
 - output file picker
-- optional work-folder picker
+- output type selector
+- optional scratch-folder picker
 - Convert button
 - Validate Output button
 - activity log
@@ -79,11 +80,11 @@ python scripts/build_release.py
 
 That produces:
 - **GUI app**
-  - macOS: `psarc-converter.app`
-  - Linux: `psarc-converter/`
-  - Windows: `psarc-converter/`
+  - macOS: `charts-converter.app`
+  - Linux: `charts-converter/`
+  - Windows: `charts-converter/`
 - **CLI executable**
-  - `psarc-converter-cli/`
+  - `charts-converter-cli/`
 
 under:
 
@@ -92,8 +93,8 @@ release/dist/<platform-arch>/
 ```
 
 Examples:
-- `release/dist/darwin-arm64/psarc-converter.app`
-- `release/dist/darwin-arm64/psarc-converter-cli/psarc-converter-cli`
+- `release/dist/darwin-arm64/charts-converter.app`
+- `release/dist/darwin-arm64/charts-converter-cli/charts-converter-cli`
 
 Notes:
 - the GUI build is the click-to-launch desktop app
@@ -118,7 +119,7 @@ It will:
 This tool is built as a 3-stage pipeline:
 1. **extract** proprietary source assets into `raw/`
 2. **normalize** those assets into a debuggable loose song folder
-3. **package** the normalized folder into `.feedpak`
+3. **package** the normalized folder into a packaged output file
 
 That intermediate normalized folder is the point — it keeps the converter inspectable and fixable instead of turning into a black box.
 
