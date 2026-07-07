@@ -65,8 +65,8 @@ charts-converter convert song.psarc ./out/song.feedpak
 charts-converter convert song.psarc ./out/song-charts --output-format loose-chart-folder
 charts-converter convert ./normalized/song ./out/song.feedpak --input-format loose-chart-folder
 charts-converter convert ./clone-hero/song-folder ./out/song.feedpak --input-format clone-hero-folder
-charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedback-package
-charts-converter convert ./clone-hero-library ./out-folder --batch --input-format clone-hero-folder --output-format feedback-package
+charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedpak-package
+charts-converter convert ./clone-hero-library ./out-folder --batch --input-format clone-hero-folder --output-format feedpak-package
 charts-converter validate ./out/song.feedpak
 charts-converter validate ./out/song-charts
 ```

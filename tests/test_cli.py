@@ -11,9 +11,10 @@ from charts_converter.core import (
     INPUT_FORMAT_CLONE_HERO,
     INPUT_FORMAT_LOOSE,
     INPUT_FORMAT_PSARC,
-    OUTPUT_FORMAT_FEEDBACK,
+    OUTPUT_FORMAT_FEEDPAK,
     OUTPUT_FORMAT_FOLDER,
     _default_work_root,
+    _normalize_output_path,
     batch_convert_chart_sources,
     convert_chart_source,
     detect_input_format,
@@ -104,7 +105,7 @@ def test_inspect_reports_real_archive_shape() -> None:
     assert report.entry_count > 0
 
 
-def test_validate_cli_accepts_generated_feedback_package(capsys) -> None:
+def test_validate_cli_accepts_generated_feedpak_package(capsys) -> None:
     code = cli_main(["validate", str(PACKAGE_SAMPLE)])
     captured = capsys.readouterr().out
     data = json.loads(captured)
@@ -184,22 +185,22 @@ def test_convert_psarc_to_loose_chart_folder(tmp_path: Path) -> None:
     assert (out_dir / "stems" / "full.ogg").exists()
 
 
-def test_convert_loose_chart_folder_to_feedback_package(tmp_path: Path) -> None:
+def test_convert_loose_chart_folder_to_feedpak_package(tmp_path: Path) -> None:
     loose_dir = tmp_path / "source-charts"
     convert_chart_source(PSARC_SAMPLE, loose_dir, output_format=OUTPUT_FORMAT_FOLDER)
     out_file = tmp_path / "repacked.feedpak"
-    report = convert_chart_source(loose_dir, out_file, input_format=INPUT_FORMAT_LOOSE, output_format=OUTPUT_FORMAT_FEEDBACK)
+    report = convert_chart_source(loose_dir, out_file, input_format=INPUT_FORMAT_LOOSE, output_format=OUTPUT_FORMAT_FEEDPAK)
     assert report.input_format == INPUT_FORMAT_LOOSE
     assert out_file.exists()
 
 
-def test_batch_convert_psarc_folder_to_feedback(tmp_path: Path) -> None:
-    out_root = tmp_path / "batch-feedback"
+def test_batch_convert_psarc_folder_to_feedpak(tmp_path: Path) -> None:
+    out_root = tmp_path / "batch-feedpak"
     report = batch_convert_chart_sources(
         PSARC_FOLDER,
         out_root,
         input_format=INPUT_FORMAT_PSARC,
-        output_format=OUTPUT_FORMAT_FEEDBACK,
+        output_format=OUTPUT_FORMAT_FEEDPAK,
     )
     assert report.discovered_inputs >= 3
     assert report.failed_count == 0
@@ -229,7 +230,7 @@ def test_cli_batch_convert_reports_results(capsys, tmp_path: Path) -> None:
         "--input-format",
         "psarc",
         "--output-format",
-        "feedback-package",
+        "feedpak-package",
     ])
     captured = capsys.readouterr().out
     data = json.loads(captured)
@@ -238,11 +239,11 @@ def test_cli_batch_convert_reports_results(capsys, tmp_path: Path) -> None:
     assert data["failed_count"] == 0
 
 
-def test_clone_hero_convert_to_feedback_package(tmp_path: Path) -> None:
+def test_clone_hero_convert_to_feedpak_package(tmp_path: Path) -> None:
     _enable_clone_hero_helper()
     song_dir = _make_clone_hero_song(tmp_path, "clone-hero-single")
     out_file = tmp_path / "clone-hero.feedpak"
-    report = convert_chart_source(song_dir, out_file, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDBACK)
+    report = convert_chart_source(song_dir, out_file, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDPAK)
     assert report.input_format == INPUT_FORMAT_CLONE_HERO
     assert out_file.exists()
     validation = cli_main(["validate", str(out_file)])
@@ -267,7 +268,7 @@ def test_clone_hero_batch_discovery_and_conversion(tmp_path: Path) -> None:
     hits = discover_batch_inputs(root, INPUT_FORMAT_CLONE_HERO)
     assert len(hits) == 2
     out_root = tmp_path / "clone-batch-out"
-    report = batch_convert_chart_sources(root, out_root, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDBACK)
+    report = batch_convert_chart_sources(root, out_root, input_format=INPUT_FORMAT_CLONE_HERO, output_format=OUTPUT_FORMAT_FEEDPAK)
     assert report.failed_count == 0
     assert report.converted_count == 2
     assert len(list(out_root.glob("*.feedpak"))) == 2
@@ -286,7 +287,7 @@ def test_batch_summary_mentions_counts(tmp_path: Path) -> None:
         PSARC_FOLDER,
         out_root,
         input_format=INPUT_FORMAT_PSARC,
-        output_format=OUTPUT_FORMAT_FEEDBACK,
+        output_format=OUTPUT_FORMAT_FEEDPAK,
     )
     summary = summarize_batch_report(report)
     assert "Discovered:" in summary
@@ -296,3 +297,17 @@ def test_batch_summary_mentions_counts(tmp_path: Path) -> None:
 def test_gui_smoke_test_returns_zero() -> None:
     code = gui_main(["--smoke-test"])
     assert code == 0
+
+
+def test_cli_output_format_choices_are_feedpak_only() -> None:
+    parser = build_parser()
+    subparsers_action = next(action for action in parser._subparsers._group_actions if hasattr(action, "choices"))
+    convert_parser = subparsers_action.choices["convert"]
+    output_action = next(action for action in convert_parser._actions if action.dest == "output_format")
+    assert output_action.default == "feedpak-package"
+    assert tuple(sorted(output_action.choices)) == ("feedpak-package", "loose-chart-folder")
+
+
+def test_normalize_output_path_forces_feedpak_extension() -> None:
+    normalized = _normalize_output_path("/tmp/old-name.zip", OUTPUT_FORMAT_FEEDPAK)
+    assert normalized == Path("/tmp/old-name.feedpak")

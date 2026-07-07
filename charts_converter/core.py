@@ -104,7 +104,7 @@ class BatchConversionReport:
 INPUT_FORMAT_PSARC = "psarc"
 INPUT_FORMAT_LOOSE = "loose-chart-folder"
 INPUT_FORMAT_CLONE_HERO = "clone-hero-folder"
-OUTPUT_FORMAT_FEEDBACK = "feedback-package"
+OUTPUT_FORMAT_FEEDPAK = "feedpak-package"
 OUTPUT_FORMAT_FOLDER = "loose-chart-folder"
 
 INPUT_FORMAT_LABELS = {
@@ -114,16 +114,14 @@ INPUT_FORMAT_LABELS = {
 }
 
 OUTPUT_FORMAT_LABELS = {
-    OUTPUT_FORMAT_FEEDBACK: "Feedpak package",
+    OUTPUT_FORMAT_FEEDPAK: "Feedpak package",
     OUTPUT_FORMAT_FOLDER: "Loose chart folder",
 }
 
 OUTPUT_EXTENSIONS = {
-    OUTPUT_FORMAT_FEEDBACK: ".feedpak",
+    OUTPUT_FORMAT_FEEDPAK: ".feedpak",
     OUTPUT_FORMAT_FOLDER: "",
 }
-
-LEGACY_PACKAGE_EXTENSIONS = {".feedback", ".feedpak", ".sloppak"}
 
 
 def _sha256_file(path: Path) -> str:
@@ -474,9 +472,8 @@ def datetime_to_iso8601() -> str:
 
 def _normalize_output_path(output_path: str | Path, output_format: str) -> Path:
     out = Path(output_path)
-    if output_format == OUTPUT_FORMAT_FEEDBACK:
-        if out.suffix.lower() not in LEGACY_PACKAGE_EXTENSIONS:
-            out = out.with_suffix(OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDBACK])
+    if output_format == OUTPUT_FORMAT_FEEDPAK:
+        out = out.with_suffix(OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDPAK])
         return out
     return out
 
@@ -528,7 +525,7 @@ def convert_chart_source(
     output_path: str | Path,
     *,
     input_format: str | None = None,
-    output_format: str = OUTPUT_FORMAT_FEEDBACK,
+    output_format: str = OUTPUT_FORMAT_FEEDPAK,
     work_root: str | Path | None = None,
 ) -> ConversionReport:
     src = Path(input_path)
@@ -545,7 +542,7 @@ def convert_chart_source(
     staged = _stage_input_as_loose_chart_folder(src, workdir, detected_input_format)
 
     out = _normalize_output_path(output_path, output_format)
-    if output_format == OUTPUT_FORMAT_FEEDBACK:
+    if output_format == OUTPUT_FORMAT_FEEDPAK:
         package_loose_song(Path(staged.manifest_path).parent, out)
     elif output_format == OUTPUT_FORMAT_FOLDER:
         copy_loose_chart_folder(Path(staged.manifest_path).parent, out)
@@ -597,8 +594,8 @@ def _sanitize_name(value: str) -> str:
 
 def _batch_output_path(output_root: Path, source_path: Path, output_format: str) -> Path:
     base_name = _sanitize_name(source_path.stem if source_path.is_file() else source_path.name)
-    if output_format == OUTPUT_FORMAT_FEEDBACK:
-        return output_root / f"{base_name}{OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDBACK]}"
+    if output_format == OUTPUT_FORMAT_FEEDPAK:
+        return output_root / f"{base_name}{OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDPAK]}"
     if output_format == OUTPUT_FORMAT_FOLDER:
         return output_root / base_name
     raise RuntimeError(f"Unsupported output format: {output_format}")
@@ -670,7 +667,7 @@ def batch_convert_chart_sources(
 
 # Backward-compatible wrappers while the tool grows beyond the original path.
 def convert_input_to_chart_package(input_path: str | Path, output_path: str | Path, work_root: str | Path | None = None) -> ConversionReport:
-    return convert_chart_source(input_path, output_path, output_format=OUTPUT_FORMAT_FEEDBACK, work_root=work_root)
+    return convert_chart_source(input_path, output_path, output_format=OUTPUT_FORMAT_FEEDPAK, work_root=work_root)
 
 
 # Older exported names kept for compatibility.

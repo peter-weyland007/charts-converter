@@ -16,7 +16,7 @@ from .core import (
     INPUT_FORMAT_CLONE_HERO,
     INPUT_FORMAT_LOOSE,
     INPUT_FORMAT_PSARC,
-    OUTPUT_FORMAT_FEEDBACK,
+    OUTPUT_FORMAT_FEEDPAK,
     OUTPUT_FORMAT_FOLDER,
     BatchConversionReport,
     batch_convert_chart_sources,
@@ -77,7 +77,7 @@ INPUT_FORMATS: dict[str, InputFormat] = {
 
 OUTPUT_FORMATS: dict[str, OutputFormat] = {
     "Feedpak package": OutputFormat(
-        id=OUTPUT_FORMAT_FEEDBACK,
+        id=OUTPUT_FORMAT_FEEDPAK,
         label="Feedpak package",
         extension=".feedpak",
         browse_kind="file",

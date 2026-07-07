@@ -80,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     convert_p.add_argument("input", help="Path to an input file, loose chart folder, or batch input folder")
     convert_p.add_argument("output", help="Destination output path or batch output folder")
     convert_p.add_argument("--input-format", choices=sorted(INPUT_FORMAT_LABELS.keys()), default="psarc", help="Override detected input format")
-    convert_p.add_argument("--output-format", choices=sorted(OUTPUT_FORMAT_LABELS.keys()), default="feedback-package", help="Choose the output shape")
+    convert_p.add_argument("--output-format", choices=sorted(OUTPUT_FORMAT_LABELS.keys()), default="feedpak-package", help="Choose the output shape")
     convert_p.add_argument("--batch", action="store_true", help="Treat input as a folder and batch-convert all discovered inputs of the selected input format")
     convert_p.add_argument("--work-root", help="Workspace root for staged conversion data")
     convert_p.set_defaults(func=cmd_convert)
