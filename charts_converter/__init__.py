@@ -4,11 +4,11 @@ from .core import (
     PsarcInspection,
     ToolProbe,
     ValidationReport,
-    convert_psarc_to_feedpak,
-    extract_psarc,
-    inspect_psarc,
+    convert_input_to_chart_package,
+    extract_input_archive,
+    inspect_input_file,
     package_loose_song,
-    validate_feedpak,
+    validate_chart_package,
 )
 
 __all__ = [
@@ -17,9 +17,9 @@ __all__ = [
     "PsarcInspection",
     "ToolProbe",
     "ValidationReport",
-    "convert_psarc_to_feedpak",
-    "extract_psarc",
-    "inspect_psarc",
+    "convert_input_to_chart_package",
+    "extract_input_archive",
+    "inspect_input_file",
     "package_loose_song",
-    "validate_feedpak",
+    "validate_chart_package",
 ]

@@ -123,7 +123,11 @@ def inspect_psarc(path: str | Path) -> PsarcInspection:
 
 
 def _default_work_root(input_path: Path) -> Path:
-    return default_user_cache_dir("psarc-converter") / input_path.stem.replace(" ", "_")
+    return default_user_cache_dir("charts-converter") / input_path.stem.replace(" ", "_")
+
+
+def inspect_input_file(path: str | Path) -> PsarcInspection:
+    return inspect_psarc(path)
 
 
 def _find_manifest_in_dir(src: Path) -> Path:
@@ -171,7 +175,7 @@ def package_loose_song(loose_dir: str | Path, output_path: str | Path) -> Path:
     return out
 
 
-def validate_feedpak(path: str | Path) -> ValidationReport:
+def validate_chart_package(path: str | Path) -> ValidationReport:
     p = Path(path)
     if not p.exists():
         return ValidationReport(str(p), False, None, [f"Path does not exist: {p}"], [], 0, None, None, None)
@@ -202,7 +206,7 @@ def validate_feedpak(path: str | Path) -> ValidationReport:
     return ValidationReport(str(p.resolve()), not issues, manifest_path, issues, warnings, arrangement_count, feedpak_version, title, artist)
 
 
-def extract_psarc(input_path: str | Path, work_root: str | Path | None = None) -> ExtractionReport:
+def extract_input_archive(input_path: str | Path, work_root: str | Path | None = None) -> ExtractionReport:
     src = Path(input_path)
     if not src.exists():
         raise FileNotFoundError(src)
@@ -242,7 +246,7 @@ def _find_wem_files(extracted_dir: Path) -> list[Path]:
 def _wem_to_ogg(wem_path: Path, out_ogg: Path) -> None:
     vgmstream = _require_tool("vgmstream-cli")
     ffmpeg = _require_tool("ffmpeg")
-    with tempfile.TemporaryDirectory(prefix="psarc_converter_audio_") as td:
+    with tempfile.TemporaryDirectory(prefix="charts_converter_audio_") as td:
         wav = Path(td) / "full.wav"
         r = subprocess.run([vgmstream, "-o", str(wav), str(wem_path)], capture_output=True, text=True)
         if r.returncode != 0 or not wav.exists() or wav.stat().st_size < 100:
@@ -351,7 +355,7 @@ def _write_normalized_song(extracted_dir: Path, normalized_dir: Path) -> Convers
     )
 
 
-def convert_psarc_to_feedpak(input_path: str | Path, output_path: str | Path, work_root: str | Path | None = None) -> ConversionReport:
+def convert_input_to_chart_package(input_path: str | Path, output_path: str | Path, work_root: str | Path | None = None) -> ConversionReport:
     src = Path(input_path)
     if not src.exists():
         raise FileNotFoundError(src)
@@ -374,3 +378,9 @@ def convert_psarc_to_feedpak(input_path: str | Path, output_path: str | Path, wo
     report.output_path = str(out.resolve())
     report.input_path = str(src.resolve())
     return report
+
+
+# Backward-compatible aliases while the tool grows beyond the original PSARC→feedpak path.
+extract_psarc = extract_input_archive
+convert_psarc_to_feedpak = convert_input_to_chart_package
+validate_feedpak = validate_chart_package

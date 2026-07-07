@@ -1,4 +1,4 @@
-from psarc_converter.cli import main
+from charts_converter.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

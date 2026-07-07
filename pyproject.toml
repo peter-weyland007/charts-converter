@@ -25,11 +25,11 @@ build = [
 ]
 
 [project.scripts]
-charts-converter = "psarc_converter.cli:main"
-charts-converter-gui = "psarc_converter.gui:main"
+charts-converter = "charts_converter.cli:main"
+charts-converter-gui = "charts_converter.gui:main"
 
 [tool.setuptools]
-packages = ["psarc_converter"]
+packages = ["charts_converter"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

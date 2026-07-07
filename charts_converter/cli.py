@@ -6,11 +6,11 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .core import (
-    convert_psarc_to_feedpak,
-    extract_psarc,
-    inspect_psarc,
+    convert_input_to_chart_package,
+    extract_input_archive,
+    inspect_input_file,
     package_loose_song,
-    validate_feedpak,
+    validate_chart_package,
 )
 
 
@@ -19,13 +19,13 @@ def _print_json(payload: object) -> None:
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
-    report = inspect_psarc(args.input)
+    report = inspect_input_file(args.input)
     _print_json(asdict(report))
     return 0 if report.exists else 1
 
 
 def cmd_extract(args: argparse.Namespace) -> int:
-    report = extract_psarc(args.input, work_root=args.work_root)
+    report = extract_input_archive(args.input, work_root=args.work_root)
     _print_json(asdict(report))
     return 0
 
@@ -37,13 +37,13 @@ def cmd_convert(args: argparse.Namespace) -> int:
         packaged = package_loose_song(src, out)
         _print_json({"status": "packaged", "input_kind": "loose-song-dir", "output": str(packaged.resolve())})
         return 0
-    report = convert_psarc_to_feedpak(src, out, work_root=args.work_root)
+    report = convert_input_to_chart_package(src, out, work_root=args.work_root)
     _print_json(asdict(report))
     return 0
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    report = validate_feedpak(args.input)
+    report = validate_chart_package(args.input)
     _print_json(asdict(report))
     return 0 if report.ok else 1
 

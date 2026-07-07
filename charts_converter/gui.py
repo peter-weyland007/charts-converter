@@ -4,23 +4,60 @@ import argparse
 import json
 import queue
 import threading
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from .core import convert_psarc_to_feedpak, validate_feedpak
+from .core import convert_input_to_chart_package, validate_chart_package
 
-OUTPUT_FORMATS: dict[str, str] = {
-    "Feedback package (*.feedback)": ".feedback",
+
+@dataclass(frozen=True)
+class InputFormat:
+    label: str
+    filetypes: list[tuple[str, str]]
+    preferred_suffixes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class OutputFormat:
+    label: str
+    extension: str
+    filetypes: list[tuple[str, str]]
+
+
+INPUT_FORMATS: dict[str, InputFormat] = {
+    "PSARC archive": InputFormat(
+        label="PSARC archive",
+        filetypes=[("PSARC archives", "*.psarc"), ("All files", "*")],
+        preferred_suffixes=(".psarc",),
+    ),
 }
+
+OUTPUT_FORMATS: dict[str, OutputFormat] = {
+    "Feedback package": OutputFormat(
+        label="Feedback package",
+        extension=".feedback",
+        filetypes=[("Feedback packages", "*.feedback"), ("All files", "*")],
+    ),
+}
+
+DEFAULT_INPUT_FORMAT = next(iter(INPUT_FORMATS))
 DEFAULT_OUTPUT_FORMAT = next(iter(OUTPUT_FORMATS))
 
 
+def selected_input_format(label: str) -> InputFormat:
+    return INPUT_FORMATS.get(label, INPUT_FORMATS[DEFAULT_INPUT_FORMAT])
+
+
+def selected_output_format(label: str) -> OutputFormat:
+    return OUTPUT_FORMATS.get(label, OUTPUT_FORMATS[DEFAULT_OUTPUT_FORMAT])
+
+
 def selected_output_extension(label: str) -> str:
-    return OUTPUT_FORMATS.get(label, ".feedback")
+    return selected_output_format(label).extension
 
 
 def suggest_output_path(input_path: str, output_extension: str = ".feedback") -> str:
@@ -40,14 +77,15 @@ class ConverterApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("charts-converter")
-        self.root.geometry("860x620")
-        self.root.minsize(760, 520)
+        self.root.geometry("860x660")
+        self.root.minsize(780, 560)
 
+        self.input_format_var = tk.StringVar(value=DEFAULT_INPUT_FORMAT)
         self.input_var = tk.StringVar()
-        self.output_var = tk.StringVar()
         self.output_format_var = tk.StringVar(value=DEFAULT_OUTPUT_FORMAT)
+        self.output_var = tk.StringVar()
         self.work_root_var = tk.StringVar()
-        self.status_var = tk.StringVar(value="Pick an input file, then click Convert.")
+        self.status_var = tk.StringVar(value="Choose input/output types, then pick files and click Convert.")
         self._last_suggested_output = ""
         self._queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -65,24 +103,36 @@ class ConverterApp:
         top.grid(row=0, column=0, sticky="nsew")
         top.columnconfigure(1, weight=1)
 
-        ttk.Label(top, text="Input file").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.input_var).grid(row=0, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Browse…", command=self.choose_input).grid(row=0, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Input type").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        input_type = ttk.Combobox(top, textvariable=self.input_format_var, state="readonly", values=list(INPUT_FORMATS.keys()))
+        input_type.grid(row=0, column=1, sticky="ew", pady=(0, 8))
 
-        ttk.Label(top, text="Output file").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.output_var).grid(row=1, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Save As…", command=self.choose_output).grid(row=1, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Input file").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.input_var).grid(row=1, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Browse…", command=self.choose_input).grid(row=1, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
         ttk.Label(top, text="Output type").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         output_type = ttk.Combobox(top, textvariable=self.output_format_var, state="readonly", values=list(OUTPUT_FORMATS.keys()))
         output_type.grid(row=2, column=1, sticky="ew", pady=(0, 8))
 
-        ttk.Label(top, text="Scratch folder (optional)").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.work_root_var).grid(row=3, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=3, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Output file").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.output_var).grid(row=3, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Save As…", command=self.choose_output).grid(row=3, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+
+        ttk.Label(top, text="Scratch folder (optional)").grid(row=4, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.work_root_var).grid(row=4, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=4, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+
+        help_text = (
+            "Leave Scratch folder blank to use your system cache. "
+            "More input and output formats can be added later without changing the layout."
+        )
+        ttk.Label(top, text=help_text, wraplength=760, foreground="#666666").grid(
+            row=5, column=0, columnspan=3, sticky="w", pady=(0, 8)
+        )
 
         button_row = ttk.Frame(top)
-        button_row.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        button_row.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         self.convert_btn = ttk.Button(button_row, text="Convert", command=self.start_convert)
         self.convert_btn.pack(side="left")
         self.validate_btn = ttk.Button(button_row, text="Validate Output", command=self.validate_output)
@@ -91,7 +141,7 @@ class ConverterApp:
         self.open_btn.pack(side="left", padx=(8, 0))
 
         status = ttk.Label(top, textvariable=self.status_var)
-        status.grid(row=5, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        status.grid(row=7, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         main = ttk.Frame(self.root, padding=(14, 0, 14, 14))
         main.grid(row=1, column=0, sticky="nsew")
@@ -130,18 +180,20 @@ class ConverterApp:
         self._last_suggested_output = suggested
 
     def choose_input(self) -> None:
-        path = filedialog.askopenfilename(filetypes=[("Supported input files", "*.psarc"), ("All files", "*")])
+        input_format = selected_input_format(self.input_format_var.get().strip())
+        path = filedialog.askopenfilename(filetypes=input_format.filetypes)
         if path:
             self.input_var.set(path)
 
     def choose_output(self) -> None:
-        extension = selected_output_extension(self.output_format_var.get().strip())
+        output_format = selected_output_format(self.output_format_var.get().strip())
+        extension = output_format.extension
         initial = self.output_var.get().strip() or suggest_output_path(self.input_var.get().strip(), extension)
         path = filedialog.asksaveasfilename(
             defaultextension=extension,
             initialfile=Path(initial).name if initial else f"output{extension}",
             initialdir=str(Path(initial).parent) if initial else None,
-            filetypes=[(self.output_format_var.get().strip(), f"*{extension}"), ("All files", "*")],
+            filetypes=output_format.filetypes,
         )
         if path:
             self.output_var.set(path)
@@ -177,7 +229,7 @@ class ConverterApp:
 
     def _run_convert(self, input_path: str, output_path: str, work_root: str | None) -> None:
         try:
-            report = convert_psarc_to_feedpak(input_path, output_path, work_root=work_root)
+            report = convert_input_to_chart_package(input_path, output_path, work_root=work_root)
             self._queue.put(("convert_ok", report))
         except Exception as exc:  # pragma: no cover - exercised via manual GUI path
             self._queue.put(("convert_err", exc))
@@ -187,7 +239,7 @@ class ConverterApp:
         if not output_path:
             messagebox.showerror("Missing output", "Choose or generate an output file first.")
             return
-        report = validate_feedpak(output_path)
+        report = validate_chart_package(output_path)
         self._append_log("Validation result:\n" + format_report(report))
         if report.ok:
             self.status_var.set("Validation passed.")
