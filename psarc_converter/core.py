@@ -221,12 +221,15 @@ def extract_psarc(input_path: str | Path, work_root: str | Path | None = None) -
 
 
 def _require_tool(name: str) -> str:
-    bundled = None
+    bundled_subdir = None
+    bundled_name = None
     if name == "ffmpeg":
-        bundled = "tools/ffmpeg/ffmpeg"
+        bundled_subdir = "tools/ffmpeg"
+        bundled_name = "ffmpeg"
     elif name == "vgmstream-cli":
-        bundled = "tools/vgmstream/vgmstream-cli"
-    path = find_command(name, bundled)
+        bundled_subdir = "tools/vgmstream"
+        bundled_name = "vgmstream-cli"
+    path = find_command(name, bundled_subdir=bundled_subdir, bundled_name=bundled_name)
     if not path:
         raise RuntimeError(f"Required tool not found on PATH: {name}")
     return path

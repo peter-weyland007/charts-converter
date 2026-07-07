@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 build = [
+  "imageio-ffmpeg>=0.6.0",
   "pyinstaller>=6.10",
   "pytest>=8.0",
 ]
@@ -26,6 +27,9 @@ build = [
 [project.scripts]
 psarc-converter = "psarc_converter.cli:main"
 psarc-converter-gui = "psarc_converter.gui:main"
+
+[tool.setuptools]
+packages = ["psarc_converter"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

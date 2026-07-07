@@ -11,18 +11,22 @@ Right now it provides:
 - a simple **desktop GUI** that wraps the same converter core
 - real conversion coverage against multiple sample `.psarc` files
 - packaging for **macOS, Linux, and Windows** executables
+- self-contained release builds that bundle the converter helper tools
 
-What is currently expected on the host:
+## What is bundled in release builds
+
+Release executables now bundle:
 - `ffmpeg`
 - `vgmstream-cli`
+- `RsCli`
 
-Bundled inside the app/builds:
-- `RsCli` for SNG-only conversion support
+That means the packaged app/CLI can convert songs without requiring those tools to already be installed on the target machine.
 
-What is not done yet:
+## What is still not done
+
 - multi-stem separation (current output is a single full-song stem)
-- bundling `ffmpeg` and `vgmstream-cli` per platform
 - GUI polish beyond the first usable local window
+- notarization/signing/distribution polish for consumer-facing macOS releases
 
 ## Install
 
@@ -81,11 +85,20 @@ That produces:
 - **CLI executable**
   - `psarc-converter-cli/`
 
-under `release/dist/<platform-arch>/`
+under:
+
+```text
+release/dist/<platform-arch>/
+```
+
+Examples:
+- `release/dist/darwin-arm64/psarc-converter.app`
+- `release/dist/darwin-arm64/psarc-converter-cli/psarc-converter-cli`
 
 Notes:
 - the GUI build is the click-to-launch desktop app
 - the CLI build is for terminal-only use
+- helper binaries are staged automatically during the build
 - GitHub Actions also builds zipped artifacts for macOS / Linux / Windows
 
 ## GitHub Actions release flow
@@ -95,6 +108,7 @@ The repo includes:
 
 It will:
 - run tests
+- prepare bundled runtime tools for the runner OS
 - build GUI + CLI artifacts on macOS, Linux, and Windows
 - upload zipped artifacts
 - attach them to tagged releases like `v0.1.0`

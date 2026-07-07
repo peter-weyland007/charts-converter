@@ -11,6 +11,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST_ROOT = ROOT / "release" / "dist"
 BUILD_ROOT = ROOT / "release" / "build"
+RUNTIME_ROOT = BUILD_ROOT / "runtime"
+
+
+def _platform_tag() -> str:
+    machine = platform.machine().lower()
+    aliases = {"amd64": "x86_64", "x64": "x86_64", "aarch64": "arm64"}
+    return f"{platform.system().lower()}-{aliases.get(machine, machine)}"
 
 
 def _data_sep() -> str:
@@ -21,15 +28,30 @@ def _pyinstaller() -> list[str]:
     return [sys.executable, "-m", "PyInstaller"]
 
 
-def _tool_add_data_args() -> list[str]:
-    rscli_dir = ROOT / "tools" / "rscli"
+def _prepare_runtime_tools() -> Path:
+    out_dir = RUNTIME_ROOT / _platform_tag()
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        sys.executable,
+        "scripts/prepare_runtime_tools.py",
+        "--output-dir",
+        str(out_dir),
+    ], cwd=ROOT, check=True)
+    return out_dir
+
+
+def _tool_add_data_args(runtime_dir: Path) -> list[str]:
     args: list[str] = []
-    if rscli_dir.exists():
-        args.extend(["--add-data", f"{rscli_dir}{_data_sep()}tools/rscli"])
+    for tool_name in ["rscli", "ffmpeg", "vgmstream"]:
+        tool_dir = runtime_dir / "tools" / tool_name
+        if tool_dir.exists():
+            args.extend(["--add-data", f"{tool_dir}{_data_sep()}tools/{tool_name}"])
     return args
 
 
-def _common_args(name: str, dist_dir: Path, console: bool) -> list[str]:
+def _common_args(name: str, dist_dir: Path, console: bool, runtime_dir: Path) -> list[str]:
     args = [
         *_pyinstaller(),
         "--noconfirm",
@@ -42,23 +64,23 @@ def _common_args(name: str, dist_dir: Path, console: bool) -> list[str]:
         str(BUILD_ROOT / name),
         "--specpath",
         str(BUILD_ROOT / "specs"),
-        *(_tool_add_data_args()),
+        *(_tool_add_data_args(runtime_dir)),
     ]
     if not console:
         args.append("--windowed")
     return args
 
 
-def build_cli(dist_dir: Path) -> Path:
+def build_cli(dist_dir: Path, runtime_dir: Path) -> Path:
     name = "psarc-converter-cli"
-    cmd = _common_args(name, dist_dir, console=True) + ["scripts/pyinstaller_cli_entry.py"]
+    cmd = _common_args(name, dist_dir, console=True, runtime_dir=runtime_dir) + ["scripts/pyinstaller_cli_entry.py"]
     subprocess.run(cmd, cwd=ROOT, check=True)
     return dist_dir / name
 
 
-def build_gui(dist_dir: Path) -> Path:
+def build_gui(dist_dir: Path, runtime_dir: Path) -> Path:
     name = "psarc-converter"
-    cmd = _common_args(name, dist_dir, console=False) + ["scripts/pyinstaller_gui_entry.py"]
+    cmd = _common_args(name, dist_dir, console=False, runtime_dir=runtime_dir) + ["scripts/pyinstaller_gui_entry.py"]
     subprocess.run(cmd, cwd=ROOT, check=True)
     if sys.platform == "darwin":
         return dist_dir / f"{name}.app"
@@ -75,17 +97,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.cli_only and args.gui_only:
         parser.error("Choose only one of --cli-only or --gui-only")
 
-    dist_dir = Path(args.output_dir) if args.output_dir else DIST_ROOT / f"{platform.system().lower()}-{platform.machine().lower()}"
+    dist_dir = Path(args.output_dir) if args.output_dir else DIST_ROOT / _platform_tag()
     if dist_dir.exists():
         shutil.rmtree(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
     (BUILD_ROOT / "specs").mkdir(parents=True, exist_ok=True)
 
+    runtime_dir = _prepare_runtime_tools()
+
     built: list[Path] = []
     if not args.gui_only:
-        built.append(build_cli(dist_dir))
+        built.append(build_cli(dist_dir, runtime_dir))
     if not args.cli_only:
-        built.append(build_gui(dist_dir))
+        built.append(build_gui(dist_dir, runtime_dir))
 
     print("Built artifacts:")
     for path in built:

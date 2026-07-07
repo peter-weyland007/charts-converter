@@ -19,13 +19,29 @@ def bundled_path(*parts: str) -> Path:
     return app_root().joinpath(*parts)
 
 
-def find_command(name: str, bundled_relpath: str | None = None) -> str | None:
+def executable_names(base_name: str) -> list[str]:
+    names = [base_name]
+    if os.name == "nt" and not base_name.lower().endswith(".exe"):
+        names.insert(0, f"{base_name}.exe")
+    return names
+
+
+def find_bundled_executable(*dir_parts: str, base_name: str) -> str | None:
+    tool_dir = bundled_path(*dir_parts)
+    for name in executable_names(base_name):
+        candidate = tool_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def find_command(name: str, bundled_subdir: str | None = None, bundled_name: str | None = None) -> str | None:
     env_name = f"{name.upper().replace('-', '_')}_PATH"
     env_value = os.environ.get(env_name, "").strip()
     if env_value and Path(env_value).exists():
         return env_value
-    if bundled_relpath:
-        candidate = bundled_path(*bundled_relpath.split("/"))
-        if candidate.exists():
-            return str(candidate)
+    if bundled_subdir and bundled_name:
+        found = find_bundled_executable(*bundled_subdir.split("/"), base_name=bundled_name)
+        if found:
+            return found
     return shutil.which(name)

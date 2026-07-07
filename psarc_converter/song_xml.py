@@ -14,7 +14,7 @@ from pathlib import Path
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
 
-from .runtime import bundled_path, find_command
+from .runtime import find_command
 
 
 @dataclass
@@ -217,17 +217,7 @@ def _detect_platform(extracted_dir: str | Path) -> str:
 
 
 def _find_rscli() -> str | None:
-    env = os.environ.get("RSCLI_PATH", "")
-    candidates = [
-        env,
-        str(bundled_path("tools", "rscli", "RsCli")),
-        "/opt/rscli/RsCli",
-        find_command("RsCli"),
-    ]
-    for candidate in candidates:
-        if candidate and Path(candidate).exists():
-            return candidate
-    return None
+    return find_command("RsCli", bundled_subdir="tools/rscli", bundled_name="RsCli")
 
 
 def _convert_sng_to_xml(extracted_dir: str | Path) -> None:
