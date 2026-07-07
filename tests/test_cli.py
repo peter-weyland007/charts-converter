@@ -15,6 +15,7 @@ from charts_converter.core import (
     OUTPUT_FORMAT_FOLDER,
     _default_work_root,
     _normalize_output_path,
+    _render_naming_template,
     batch_convert_chart_sources,
     convert_chart_source,
     detect_input_format,
@@ -208,6 +209,32 @@ def test_batch_convert_psarc_folder_to_feedpak(tmp_path: Path) -> None:
     assert (out_root / "Paramore_Hallelujah_v1_DD_p.feedpak").exists()
 
 
+def test_render_naming_template_uses_metadata_tokens() -> None:
+    rendered = _render_naming_template(
+        "{artist}_{title}.feedpak",
+        title="Hallelujah",
+        artist="Paramore",
+        album="Brand New Eyes",
+        year=2009,
+        source_name="Paramore_Hallelujah_v1_DD_p",
+        output_format=OUTPUT_FORMAT_FEEDPAK,
+    )
+    assert rendered == "Paramore_Hallelujah.feedpak"
+
+
+def test_batch_convert_psarc_folder_to_feedpak_uses_naming_template(tmp_path: Path) -> None:
+    out_root = tmp_path / "templated-feedpak"
+    report = batch_convert_chart_sources(
+        PSARC_FOLDER,
+        out_root,
+        input_format=INPUT_FORMAT_PSARC,
+        output_format=OUTPUT_FORMAT_FEEDPAK,
+        naming_template="{artist}_{title}.feedpak",
+    )
+    assert report.failed_count == 0
+    assert (out_root / "Paramore_Hallelujah.feedpak").exists()
+
+
 def test_batch_convert_psarc_folder_to_loose_folders(tmp_path: Path) -> None:
     out_root = tmp_path / "batch-folders"
     report = batch_convert_chart_sources(
@@ -231,6 +258,8 @@ def test_cli_batch_convert_reports_results(capsys, tmp_path: Path) -> None:
         "psarc",
         "--output-format",
         "feedpak-package",
+        "--naming-template",
+        "{artist}_{title}.feedpak",
     ])
     captured = capsys.readouterr().out
     data = json.loads(captured)

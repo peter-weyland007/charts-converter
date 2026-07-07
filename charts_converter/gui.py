@@ -175,6 +175,7 @@ class ConverterApp:
         self.output_format_var = tk.StringVar(value=DEFAULT_OUTPUT_FORMAT)
         self.output_var = tk.StringVar()
         self.work_root_var = tk.StringVar()
+        self.naming_template_var = tk.StringVar()
         self.input_label_var = tk.StringVar(value="Input file")
         self.output_label_var = tk.StringVar(value="Output file")
         self.output_button_var = tk.StringVar(value="Save As…")
@@ -227,20 +228,29 @@ class ConverterApp:
         ttk.Entry(top, textvariable=self.output_var).grid(row=6, column=1, sticky="ew", pady=(0, 8))
         ttk.Button(top, textvariable=self.output_button_var, command=self.choose_output).grid(row=6, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(top, text="Scratch folder (optional)").grid(row=7, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
-        ttk.Entry(top, textvariable=self.work_root_var).grid(row=7, column=1, sticky="ew", pady=(0, 8))
-        ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=7, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
+        ttk.Label(top, text="Naming convention (optional)").grid(row=7, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.naming_template_var).grid(row=7, column=1, sticky="ew", pady=(0, 8))
+        ttk.Label(
+            top,
+            text="Use variables like {artist}, {title}, {album}, {year}, or {input_name}. Example: {artist}_{title}.feedpak",
+            wraplength=780,
+            foreground="#666666",
+        ).grid(row=8, column=0, columnspan=3, sticky="w", pady=(0, 8))
+
+        ttk.Label(top, text="Scratch folder (optional)").grid(row=9, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Entry(top, textvariable=self.work_root_var).grid(row=9, column=1, sticky="ew", pady=(0, 8))
+        ttk.Button(top, text="Folder…", command=self.choose_work_root).grid(row=9, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
         help_text = (
             "Leave Scratch folder blank to use system cache. "
             "Batch mode scans the chosen input folder for supported sources of the selected input type and writes every result into the chosen output folder."
         )
         ttk.Label(top, text=help_text, wraplength=780, foreground="#666666").grid(
-            row=8, column=0, columnspan=3, sticky="w", pady=(0, 8)
+            row=10, column=0, columnspan=3, sticky="w", pady=(0, 8)
         )
 
         button_row = ttk.Frame(top)
-        button_row.grid(row=9, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        button_row.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         self.convert_btn = ttk.Button(button_row, text="Convert", command=self.start_convert)
         self.convert_btn.pack(side="left")
         self.validate_btn = ttk.Button(button_row, text="Validate Output", command=self.validate_output)
@@ -249,7 +259,7 @@ class ConverterApp:
         self.open_btn.pack(side="left", padx=(8, 0))
 
         status = ttk.Label(top, textvariable=self.status_var)
-        status.grid(row=10, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        status.grid(row=12, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         main = ttk.Frame(self.root, padding=(14, 0, 14, 14))
         main.grid(row=1, column=0, sticky="nsew")
@@ -398,9 +408,10 @@ class ConverterApp:
         self.status_var.set("Converting…")
         self._set_busy(True)
         work_root = self.work_root_var.get().strip() or None
+        naming_template = self.naming_template_var.get().strip() or None
         self._worker = threading.Thread(
             target=self._run_convert,
-            args=(source_mode, input_path, output_path, input_format.id, output_format.id, work_root),
+            args=(source_mode, input_path, output_path, input_format.id, output_format.id, work_root, naming_template),
             daemon=True,
         )
         self._worker.start()
@@ -413,6 +424,7 @@ class ConverterApp:
         input_format_id: str,
         output_format_id: str,
         work_root: str | None,
+        naming_template: str | None,
     ) -> None:
         try:
             if source_mode == SOURCE_MODE_BATCH:
@@ -422,6 +434,7 @@ class ConverterApp:
                     input_format=input_format_id,
                     output_format=output_format_id,
                     work_root=work_root,
+                    naming_template=naming_template,
                 )
                 self._queue.put(("batch_ok", report))
             else:
@@ -431,6 +444,7 @@ class ConverterApp:
                     input_format=input_format_id,
                     output_format=output_format_id,
                     work_root=work_root,
+                    naming_template=naming_template,
                 )
                 self._queue.put(("convert_ok", report))
         except Exception as exc:  # pragma: no cover

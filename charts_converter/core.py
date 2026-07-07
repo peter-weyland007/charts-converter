@@ -8,6 +8,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from string import Formatter
 
 import yaml
 from PIL import Image
@@ -527,6 +528,7 @@ def convert_chart_source(
     input_format: str | None = None,
     output_format: str = OUTPUT_FORMAT_FEEDPAK,
     work_root: str | Path | None = None,
+    naming_template: str | None = None,
 ) -> ConversionReport:
     src = Path(input_path)
     if not src.exists():
@@ -540,8 +542,37 @@ def convert_chart_source(
 
     workdir = Path(work_root) if work_root else _default_work_root(src)
     staged = _stage_input_as_loose_chart_folder(src, workdir, detected_input_format)
+    manifest_data = yaml.safe_load(Path(staged.manifest_path).read_text(encoding="utf-8")) or {}
+    manifest_map = manifest_data if isinstance(manifest_data, dict) else {}
+    album_value = manifest_map.get("album")
+    album = album_value if isinstance(album_value, str) else ""
+    try:
+        year = int(manifest_map.get("year") or 0)
+    except (TypeError, ValueError):
+        year = 0
 
+    raw_output = Path(output_path)
     out = _normalize_output_path(output_path, output_format)
+    if naming_template:
+        if raw_output.exists() and raw_output.is_dir():
+            parent = raw_output
+        elif not raw_output.suffix:
+            parent = raw_output
+        else:
+            parent = raw_output.parent
+        if not str(parent).strip():
+            parent = Path.cwd()
+        parent.mkdir(parents=True, exist_ok=True)
+        out = _batch_output_path(
+            parent,
+            src,
+            output_format,
+            naming_template=naming_template,
+            title=staged.title,
+            artist=staged.artist,
+            album=album,
+            year=year,
+        )
     if output_format == OUTPUT_FORMAT_FEEDPAK:
         package_loose_song(Path(staged.manifest_path).parent, out)
     elif output_format == OUTPUT_FORMAT_FOLDER:
@@ -592,7 +623,63 @@ def _sanitize_name(value: str) -> str:
     return cleaned or "converted"
 
 
-def _batch_output_path(output_root: Path, source_path: Path, output_format: str) -> Path:
+def _render_naming_template(
+    template: str,
+    *,
+    title: str,
+    artist: str,
+    album: str,
+    year: int,
+    source_name: str,
+    output_format: str,
+) -> str:
+    values = {
+        "title": _sanitize_name(title),
+        "artist": _sanitize_name(artist),
+        "album": _sanitize_name(album),
+        "year": _sanitize_name(str(year)) if year else "",
+        "input_name": _sanitize_name(source_name),
+    }
+    rendered_parts: list[str] = []
+    for literal_text, field_name, format_spec, conversion in Formatter().parse(template):
+        if format_spec or conversion:
+            raise ValueError("Naming template format specifiers are not supported.")
+        if literal_text:
+            rendered_parts.append(literal_text)
+        if field_name:
+            if field_name not in values:
+                allowed = ", ".join(sorted(values))
+                raise ValueError(f"Unsupported naming template token: {{{field_name}}}. Allowed: {allowed}")
+            rendered_parts.append(values[field_name])
+    rendered = "".join(rendered_parts).strip() or values["input_name"]
+    rendered_path = Path(rendered)
+    base_name = _sanitize_name(rendered_path.stem if rendered_path.suffix else rendered)
+    if output_format == OUTPUT_FORMAT_FEEDPAK:
+        return f"{base_name}{OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDPAK]}"
+    return base_name
+
+
+def _batch_output_path(
+    output_root: Path,
+    source_path: Path,
+    output_format: str,
+    *,
+    naming_template: str | None = None,
+    title: str = "",
+    artist: str = "",
+    album: str = "",
+    year: int = 0,
+) -> Path:
+    if naming_template:
+        return output_root / _render_naming_template(
+            naming_template,
+            title=title,
+            artist=artist,
+            album=album,
+            year=year,
+            source_name=source_path.stem if source_path.is_file() else source_path.name,
+            output_format=output_format,
+        )
     base_name = _sanitize_name(source_path.stem if source_path.is_file() else source_path.name)
     if output_format == OUTPUT_FORMAT_FEEDPAK:
         return output_root / f"{base_name}{OUTPUT_EXTENSIONS[OUTPUT_FORMAT_FEEDPAK]}"
@@ -608,6 +695,7 @@ def batch_convert_chart_sources(
     input_format: str,
     output_format: str,
     work_root: str | Path | None = None,
+    naming_template: str | None = None,
 ) -> BatchConversionReport:
     root = Path(input_root)
     out_root = Path(output_root)
@@ -626,11 +714,13 @@ def batch_convert_chart_sources(
         try:
             report = convert_chart_source(
                 source,
-                target,
+                out_root if naming_template else target,
                 input_format=input_format,
                 output_format=output_format,
                 work_root=item_work_root,
+                naming_template=naming_template,
             )
+            target = Path(report.output_path)
             items.append(
                 BatchItemResult(
                     input_path=str(source.resolve()),

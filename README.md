@@ -67,6 +67,7 @@ charts-converter convert ./normalized/song ./out/song.feedpak --input-format loo
 charts-converter convert ./clone-hero/song-folder ./out/song.feedpak --input-format clone-hero-folder
 charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedpak-package
 charts-converter convert ./clone-hero-library ./out-folder --batch --input-format clone-hero-folder --output-format feedpak-package
+charts-converter convert ./input-folder ./out-folder --batch --input-format psarc --output-format feedpak-package --naming-template '{artist}_{title}.feedpak'
 charts-converter validate ./out/song.feedpak
 charts-converter validate ./out/song-charts
 ```
@@ -83,6 +84,7 @@ The GUI currently gives you:
 - input file/folder picker
 - output type selector
 - output file/folder picker
+- optional naming convention field using variables like `{artist}`, `{title}`, `{album}`, `{year}`, and `{input_name}`
 - optional scratch-folder picker
 - Convert button
 - Validate Output button
