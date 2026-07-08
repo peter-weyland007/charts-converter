@@ -135,6 +135,21 @@ It will:
 - upload zipped artifacts
 - attach them to tagged releases like `v0.1.0`
 
+### Release download shape
+
+The best release shape is **one GitHub Release page with separate downloads per OS**, not one giant mixed zip.
+
+Expected release assets look like:
+- `charts-converter-v0.1.1-macos-x64.zip` or `charts-converter-v0.1.1-macos-arm64.zip`
+- `charts-converter-v0.1.1-windows-x64.zip`
+- `charts-converter-v0.1.1-linux-x64.zip`
+
+Why this is better than one all-in-one zip:
+- smaller download for each user
+- less confusion about which executable to run
+- simpler release automation
+- no need to ship all three operating-system bundles to every user
+
 ## Publish hygiene
 
 The repo is set up to keep generated artifacts out of git:

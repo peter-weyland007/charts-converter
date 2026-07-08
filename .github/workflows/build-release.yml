@@ -14,10 +14,37 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('main-{0}', github.sha) }}
 
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
+
+      - name: Compute release asset metadata
+        id: meta
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS)
+              os_slug="macos"
+              ;;
+            Linux)
+              os_slug="linux"
+              ;;
+            Windows)
+              os_slug="windows"
+              ;;
+            *)
+              echo "Unknown runner OS: ${{ runner.os }}" >&2
+              exit 1
+              ;;
+          esac
+          arch_slug=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+          asset_name="charts-converter-${RELEASE_VERSION}-${os_slug}-${arch_slug}.zip"
+          echo "os_slug=$os_slug" >> "$GITHUB_OUTPUT"
+          echo "arch_slug=$arch_slug" >> "$GITHUB_OUTPUT"
+          echo "asset_name=$asset_name" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -55,14 +82,15 @@ jobs:
           dirs = [p for p in root.iterdir() if p.is_dir()]
           assert dirs, 'no build output dirs found'
           out = dirs[0]
-          archive = shutil.make_archive(str(out), 'zip', root_dir=out)
+          archive_path = root / '${{ steps.meta.outputs.asset_name }}'
+          archive = shutil.make_archive(str(archive_path.with_suffix('')), 'zip', root_dir=out.parent, base_dir=out.name)
           print(archive)
           PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: charts-converter-${{ runner.os }}-${{ runner.arch }}
+          name: ${{ steps.meta.outputs.asset_name }}
           path: release/dist/*.zip
 
       - name: Publish GitHub release assets
