@@ -140,9 +140,9 @@ It will:
 The best release shape is **one GitHub Release page with separate downloads per OS**, not one giant mixed zip.
 
 Expected release assets look like:
-- `charts-converter-v0.1.1-macos-x64.zip` or `charts-converter-v0.1.1-macos-arm64.zip`
-- `charts-converter-v0.1.1-windows-x64.zip`
-- `charts-converter-v0.1.1-linux-x64.zip`
+- `charts-converter-vX.Y.Z-macos-x64.zip` or `charts-converter-vX.Y.Z-macos-arm64.zip`
+- `charts-converter-vX.Y.Z-windows-x64.zip`
+- `charts-converter-vX.Y.Z-linux-x64.zip`
 
 Why this is better than one all-in-one zip:
 - smaller download for each user

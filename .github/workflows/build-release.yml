@@ -68,7 +68,7 @@ jobs:
           python -m pip install -e '.[build]'
 
       - name: Run tests
-        run: python -m pytest tests/test_cli.py
+        run: python -m pytest tests/test_ci_smoke.py
 
       - name: Build GUI + CLI artifacts
         run: python scripts/build_release.py
